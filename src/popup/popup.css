@@ -1,0 +1,187 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  width: 160px;
+  height: 200px;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-size: 12px;
+  line-height: 1.4;
+  background: #ffffff;
+  color: #1a1a1a;
+  overflow: hidden;
+}
+
+.popup-container {
+  padding: 12px;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Header */
+.popup-header {
+  margin-bottom: 12px;
+}
+
+.popup-title {
+  font-size: 14px;
+  font-weight: 600;
+  margin-bottom: 2px;
+}
+
+.popup-subtitle {
+  font-size: 10px;
+  color: #666;
+}
+
+/* Main content */
+.popup-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* Toggle section */
+.toggle-section {
+  border-bottom: 1px solid #e1e8ed;
+  padding-bottom: 10px;
+}
+
+.toggle-label {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  cursor: pointer;
+}
+
+.toggle-text {
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.toggle-switch {
+  position: relative;
+  width: 36px;
+  height: 20px;
+}
+
+.toggle-input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.toggle-slider {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: #ccc;
+  border-radius: 20px;
+  transition: 0.2s;
+  cursor: pointer;
+}
+
+.toggle-slider:before {
+  position: absolute;
+  content: "";
+  height: 16px;
+  width: 16px;
+  left: 2px;
+  bottom: 2px;
+  background-color: white;
+  border-radius: 50%;
+  transition: 0.2s;
+}
+
+.toggle-input:checked + .toggle-slider {
+  background-color: #1da1f2;
+}
+
+.toggle-input:checked + .toggle-slider:before {
+  transform: translateX(16px);
+}
+
+/* Legend section */
+.legend-section {
+  border-bottom: 1px solid #e1e8ed;
+  padding-bottom: 8px;
+}
+
+.legend-title {
+  font-size: 11px;
+  font-weight: 600;
+  margin-bottom: 6px;
+  color: #333;
+}
+
+.legend-items {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.legend-color {
+  width: 12px;
+  height: 12px;
+  border-radius: 2px;
+  border: 1px solid #e1e8ed;
+}
+
+.views-1-demo {
+  background-color: #B4C6FF;
+}
+
+.views-2-demo {
+  background-color: #BDF4C4;
+}
+
+.views-3-demo {
+  background-color: #FFC2C2;
+}
+
+.legend-text {
+  font-size: 10px;
+  color: #666;
+}
+
+/* Config section */
+.config-section {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.config-title {
+  font-size: 11px;
+  font-weight: 600;
+  margin-bottom: 4px;
+  color: #333;
+}
+
+.config-placeholder {
+  font-size: 10px;
+  color: #999;
+  font-style: italic;
+}
+
+/* Hover effects */
+.toggle-label:hover .toggle-text {
+  color: #1da1f2;
+}
+
+.legend-item:hover .legend-text {
+  color: #333;
+} 

@@ -1,0 +1,20 @@
+{
+  "manifest_version": 3,
+  "name": "Tweet Heat Map",
+  "version": "0.1.0",
+  "description": "Color-codes tweets by view-count and flags fresh ones with 🔥.",
+  "permissions": ["activeTab", "storage", "scripting"],
+  "host_permissions": ["https://*.twitter.com/*", "https://*.x.com/*"],
+  "action": {
+    "default_popup": "popup/popup.html",
+    "default_icon": "icons/icon128.png"
+  },
+  "content_scripts": [{
+    "matches": ["https://*.twitter.com/*", "https://*.x.com/*"],
+    "js": ["content.js"],
+    "run_at": "document_idle"
+  }],
+  "icons": {
+    "128": "icons/icon128.png"
+  }
+} 

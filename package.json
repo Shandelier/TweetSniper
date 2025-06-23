@@ -1,0 +1,45 @@
+{
+  "name": "tweet-heat-map",
+  "version": "0.1.0",
+  "description": "Color-codes tweets by view-count and flags fresh ones with 🔥",
+  "main": "index.js",
+  "scripts": {
+    "build": "vite build",
+    "dev": "vite build --watch",
+    "lint": "eslint src/**/*.ts",
+    "test": "jest",
+    "format": "prettier --write src/**/*.{ts,html,css}"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Shandelier/TweetSniper.git"
+  },
+  "keywords": [
+    "chrome-extension",
+    "twitter",
+    "x",
+    "views",
+    "viral"
+  ],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/Shandelier/TweetSniper/issues"
+  },
+  "homepage": "https://github.com/Shandelier/TweetSniper#readme",
+  "devDependencies": {
+    "@eslint/js": "^9.29.0",
+    "@types/chrome": "^0.0.326",
+    "@types/jest": "^30.0.0",
+    "@typescript-eslint/eslint-plugin": "^8.34.1",
+    "@typescript-eslint/parser": "^8.34.1",
+    "eslint": "^9.29.0",
+    "jest": "^30.0.2",
+    "jest-environment-jsdom": "^30.0.2",
+    "jsdom": "^26.1.0",
+    "prettier": "^3.6.0",
+    "ts-jest": "^29.4.0",
+    "typescript": "^5.8.3",
+    "vite": "^6.3.5"
+  }
+}
