@@ -25,9 +25,6 @@ const HEAT_MAP_CSS = `
 let settings: Settings = { enabled: true };
 let observer: MutationObserver | null = null;
 let styleElement: HTMLStyleElement | null = null;
-let scanInterval: number | null = null;
-
-
 
 /**
  * Get the appropriate CSS class for a view count
@@ -111,20 +108,6 @@ function applyHeat(articleEl: HTMLElement): void {
       const className = getViewsClass(viewCount);
       if (className !== 'views-0') {
         targetEl.classList.add(className);
-
-        // Log which tweet is being colored
-        const userNamesEl = articleEl.querySelector('[data-testid="User-Names"]');
-        let userName = 'unknown';
-        if (userNamesEl && userNamesEl.textContent) {
-          const handleLine = userNamesEl.textContent
-            .split('\n')
-            .find(s => s.startsWith('@'));
-          userName = handleLine || userNamesEl.textContent.split('\n')[0];
-        }
-
-        console.log(
-          `Tweet Heat Map: Coloring tweet from ${userName} with ${className} (${viewCount} views)`
-        );
       }
     }
 
@@ -176,64 +159,51 @@ function scanExisting(): void {
  */
 function observeNew(): void {
   if (observer) return;
-  
+
   const targetNode = document.querySelector('main');
   if (!targetNode) return;
-  
-  observer = new MutationObserver((mutations) => {
-    // Use requestIdleCallback for throttling if available
+
+  observer = new MutationObserver(mutations => {
     const processChanges = () => {
       mutations.forEach(mutation => {
-        // Re-apply heat if Twitter rewrites class attribute on a tweet
-        if (
-          mutation.type === 'attributes' &&
-          mutation.attributeName === 'class' &&
-          mutation.target instanceof Element
-        ) {
-          const t = (mutation.target as Element).closest(
-            'article[data-testid="tweet"]'
-          );
-          if (t && settings.enabled) {
-            applyHeat(t as HTMLElement);
-          }
-        }
-
+        // Case 1: New nodes were added to the DOM
         mutation.addedNodes.forEach(node => {
           if (node.nodeType !== Node.ELEMENT_NODE) return;
-
           const element = node as Element;
-
-          // 1. If the element *is* a tweet article.
           if (element.matches('article[data-testid="tweet"]')) {
-            if (settings.enabled) applyHeat(element as HTMLElement);
+            applyHeat(element as HTMLElement);
           }
+          element
+            .querySelectorAll('article[data-testid="tweet"]')
+            .forEach(tweet => {
+              applyHeat(tweet as HTMLElement);
+            });
+        });
 
-          // 2. Any tweet articles contained within the added subtree.
-          element.querySelectorAll('article[data-testid="tweet"]').forEach(tweet => {
-            if (settings.enabled) applyHeat(tweet as HTMLElement);
-          });
-
-          // 3. If the new element was inserted somewhere *inside* an already-existing tweet
-          //    (e.g. Twitter later injected the view-count anchor), walk up to the
-          //    nearest tweet and re-apply heat.
-          const parentTweet = element.closest('article[data-testid="tweet"]');
-          if (parentTweet && settings.enabled) {
+        // Case 2: An attribute changed on a tweet or its child,
+        // which can happen when Twitter rewrites classes on hover.
+        if (mutation.type === 'attributes') {
+          const parentTweet = (mutation.target as Element).closest(
+            'article[data-testid="tweet"]'
+          );
+          if (parentTweet) {
             applyHeat(parentTweet as HTMLElement);
           }
-        });
+        }
       });
     };
-    
+
     if ('requestIdleCallback' in window) {
       requestIdleCallback(processChanges);
     } else {
       setTimeout(processChanges, 0);
     }
   });
-  
+
   observer.observe(targetNode, {
     childList: true,
-    subtree: true
+    subtree: true,
+    attributes: true,
   });
 }
 
@@ -263,24 +233,16 @@ function removeStyles(): void {
  * Update extension state based on settings
  */
 function updateExtensionState(): void {
-  // Stop any existing timers/observers to prevent duplicates
-  if (scanInterval) {
-    clearInterval(scanInterval);
-    scanInterval = null;
+  if (observer) {
+    observer.disconnect();
+    observer = null;
   }
 
   if (settings.enabled) {
     injectStyles();
-    // Start the periodic scanner
-    if (scanInterval === null) {
-      scanInterval = window.setInterval(scanExisting, 1000);
-    }
+    scanExisting();
+    observeNew();
   } else {
-    // Stop the scanner
-    if (scanInterval !== null) {
-      clearInterval(scanInterval);
-      scanInterval = null;
-    }
     removeStyles();
     scanExisting(); // This will remove heat from existing tweets
   }
@@ -324,10 +286,6 @@ function setupCleanup(): void {
       observer.disconnect();
       observer = null;
     }
-    if (scanInterval) {
-      clearInterval(scanInterval);
-      scanInterval = null;
-    }
   });
 }
 
@@ -340,7 +298,6 @@ async function init(): Promise<void> {
   setupCleanup();
 
   const runLogic = () => {
-    // We are no longer logging here, as the scanner will run continuously
     updateExtensionState();
   };
 

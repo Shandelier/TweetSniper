@@ -20,8 +20,8 @@ const HEAT_MAP_CSS = `
   .views-3 { border-right: 5px solid #FFC2C2 !important; }
 `;
 let settings = { enabled: true };
+let observer = null;
 let styleElement = null;
-let scanInterval = null;
 function getViewsClass(viewCount) {
   for (const threshold of VIEW_THRESHOLDS) {
     if (viewCount >= threshold.min && viewCount <= threshold.max) {
@@ -71,15 +71,6 @@ function applyHeat(articleEl) {
       const className = getViewsClass(viewCount);
       if (className !== "views-0") {
         targetEl.classList.add(className);
-        const userNamesEl = articleEl.querySelector('[data-testid="User-Names"]');
-        let userName = "unknown";
-        if (userNamesEl && userNamesEl.textContent) {
-          const handleLine = userNamesEl.textContent.split("\n").find((s) => s.startsWith("@"));
-          userName = handleLine || userNamesEl.textContent.split("\n")[0];
-        }
-        console.log(
-          `Tweet Heat Map: Coloring tweet from ${userName} with ${className} (${viewCount} views)`
-        );
       }
     }
     const timeElement = articleEl.querySelector("time");
@@ -110,6 +101,45 @@ function scanExisting() {
     }
   });
 }
+function observeNew() {
+  if (observer) return;
+  const targetNode = document.querySelector("main");
+  if (!targetNode) return;
+  observer = new MutationObserver((mutations) => {
+    const processChanges = () => {
+      mutations.forEach((mutation) => {
+        mutation.addedNodes.forEach((node) => {
+          if (node.nodeType !== Node.ELEMENT_NODE) return;
+          const element = node;
+          if (element.matches('article[data-testid="tweet"]')) {
+            applyHeat(element);
+          }
+          element.querySelectorAll('article[data-testid="tweet"]').forEach((tweet) => {
+            applyHeat(tweet);
+          });
+        });
+        if (mutation.type === "attributes") {
+          const parentTweet = mutation.target.closest(
+            'article[data-testid="tweet"]'
+          );
+          if (parentTweet) {
+            applyHeat(parentTweet);
+          }
+        }
+      });
+    };
+    if ("requestIdleCallback" in window) {
+      requestIdleCallback(processChanges);
+    } else {
+      setTimeout(processChanges, 0);
+    }
+  });
+  observer.observe(targetNode, {
+    childList: true,
+    subtree: true,
+    attributes: true
+  });
+}
 function injectStyles() {
   if (styleElement) return;
   styleElement = document.createElement("style");
@@ -124,20 +154,15 @@ function removeStyles() {
   }
 }
 function updateExtensionState() {
-  if (scanInterval) {
-    clearInterval(scanInterval);
-    scanInterval = null;
+  if (observer) {
+    observer.disconnect();
+    observer = null;
   }
   if (settings.enabled) {
     injectStyles();
-    if (scanInterval === null) {
-      scanInterval = window.setInterval(scanExisting, 1e3);
-    }
+    scanExisting();
+    observeNew();
   } else {
-    if (scanInterval !== null) {
-      clearInterval(scanInterval);
-      scanInterval = null;
-    }
     removeStyles();
     scanExisting();
   }
@@ -165,9 +190,9 @@ function setupStorageListener() {
 }
 function setupCleanup() {
   window.addEventListener("beforeunload", () => {
-    if (scanInterval) {
-      clearInterval(scanInterval);
-      scanInterval = null;
+    if (observer) {
+      observer.disconnect();
+      observer = null;
     }
   });
 }
