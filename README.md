@@ -10,6 +10,8 @@ A Chrome/Opera extension that color-codes tweets by view-count and flags fresh o
   - Red: 50K+ views
 - **Fresh tweet indicator**: 🔥 emoji for tweets ≤ 30 minutes old
 - **Toggle control**: Easy on/off switch via extension popup
+- **Keyword highlighting**: Add custom keywords to highlight in tweets
+- **Instant refresh**: Manual refresh button and automatic refresh on any setting change
 - **Wide compatibility**: Works across all Twitter/X page types
 
 ## Installation
@@ -99,6 +101,7 @@ Key solutions implemented in this extension:
 
 1.  **Target Stable Containers:** Instead of applying the `views-*` class directly to the `<article data-testid="tweet">` element, it is applied to its parent `<div>`. This parent container is less likely to be re-rendered on user interaction (e.g., hover), preventing the custom class from being removed.
 2.  **Use a Robust `MutationObserver`:** The content script observes the central `<main>` timeline for both `childList` and `attributes` changes. This ensures that styling is re-applied correctly whenever a tweet is added or its attributes (like `class`) are modified by Twitter's own scripts.
+3.  **Instant Refresh System:** Any change in the popup (toggle, keywords, manual refresh) immediately triggers re-application of effects via both direct messaging and storage events, ensuring effects are always current.
 
 ## Permissions
 

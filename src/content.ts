@@ -320,6 +320,25 @@ function setupStorageListener(): void {
 }
 
 /**
+ * Listen for messages from popup to trigger immediate refresh
+ */
+function setupMessageListener(): void {
+  chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+    if (message.action === 'forceRefresh') {
+      console.debug('Tweet Heat Map: Received force refresh request from popup');
+      
+      // Force immediate refresh
+      updateExtensionState();
+      
+      // Send acknowledgment
+      sendResponse({ success: true });
+    }
+    
+    return true; // Keep message channel open for async response
+  });
+}
+
+/**
  * Clean up when page unloads
  */
 function setupCleanup(): void {
@@ -338,6 +357,7 @@ async function init(): Promise<void> {
   await loadSettings();
   await loadKeywords();
   setupStorageListener();
+  setupMessageListener();
   setupCleanup();
 
   const runLogic = () => {

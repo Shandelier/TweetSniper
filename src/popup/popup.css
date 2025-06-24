@@ -58,6 +58,7 @@ body {
   align-items: center;
   cursor: pointer;
   padding: 8px 0;
+  margin-bottom: 12px;
 }
 
 .toggle-text {
@@ -107,6 +108,46 @@ body {
 
 .toggle-input:checked + .toggle-slider:before {
   transform: translateX(20px);
+}
+
+/* Refresh button */
+.refresh-btn {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid #e1e8ed;
+  border-radius: 6px;
+  background: #f7f9fa;
+  color: #333;
+  font-size: 13px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  transition: all 0.2s;
+}
+
+.refresh-btn:hover {
+  background: #f0f3f4;
+  border-color: #1da1f2;
+  color: #1da1f2;
+}
+
+.refresh-btn:active {
+  transform: translateY(1px);
+}
+
+.refresh-icon {
+  font-size: 14px;
+  transition: transform 0.3s;
+}
+
+.refresh-btn:hover .refresh-icon {
+  transform: rotate(180deg);
+}
+
+.refresh-text {
+  font-weight: 500;
 }
 
 /* Legend section */

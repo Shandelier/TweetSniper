@@ -11,6 +11,44 @@ const SETTINGS_KEY = 'thm-settings';
 const KEYWORDS_KEY = 'thm-keywords';
 
 /**
+ * Send a message to the content script to trigger immediate refresh
+ */
+async function triggerContentRefresh(): Promise<void> {
+  try {
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (tab.id) {
+      await chrome.tabs.sendMessage(tab.id, { action: 'forceRefresh' });
+    }
+  } catch (error) {
+    console.debug('Could not send refresh message to content script:', error);
+  }
+}
+
+/**
+ * Force a storage change event to trigger content script refresh
+ */
+async function triggerStorageRefresh(): Promise<void> {
+  try {
+    // Get current settings
+    const settings = await loadSettings();
+    // Save them again to trigger storage listener
+    await chrome.storage.sync.set({ [SETTINGS_KEY]: settings });
+  } catch (error) {
+    console.debug('Could not trigger storage refresh:', error);
+  }
+}
+
+/**
+ * Manual refresh function that uses multiple methods
+ */
+async function performManualRefresh(): Promise<void> {
+  // Try direct message first
+  await triggerContentRefresh();
+  // Fallback to storage trigger
+  await triggerStorageRefresh();
+}
+
+/**
  * Load current settings from chrome.storage
  */
 async function loadSettings(): Promise<Settings> {
@@ -79,6 +117,9 @@ async function handleToggleChange(event: Event): Promise<void> {
   
   await saveSettings(settings);
   
+  // Trigger immediate refresh
+  await triggerContentRefresh();
+  
   // Update badge icon to reflect state (optional enhancement)
   try {
     await chrome.action.setIcon({
@@ -136,6 +177,9 @@ async function addKeyword(text: string): Promise<void> {
   keywords.push(newKeyword);
   await saveKeywords(keywords);
   renderKeywords(keywords);
+  
+  // Trigger immediate refresh
+  await triggerContentRefresh();
 }
 
 /**
@@ -146,6 +190,9 @@ async function removeKeyword(index: number): Promise<void> {
   keywords.splice(index, 1);
   await saveKeywords(keywords);
   renderKeywords(keywords);
+  
+  // Trigger immediate refresh
+  await triggerContentRefresh();
 }
 
 /**
@@ -167,6 +214,23 @@ function setupKeywordListeners(): void {
   const addBtn = document.getElementById('add-keyword');
   if (addBtn) {
     addBtn.addEventListener('click', handleKeywordSubmit);
+  }
+  
+  // Refresh button
+  const refreshBtn = document.getElementById('refresh-btn');
+  if (refreshBtn) {
+    refreshBtn.addEventListener('click', async () => {
+      await performManualRefresh();
+      
+      // Visual feedback
+      const icon = refreshBtn.querySelector('.refresh-icon');
+      if (icon) {
+        icon.textContent = '✓';
+        setTimeout(() => {
+          icon.textContent = '⟳';
+        }, 1000);
+      }
+    });
   }
   
   // Enter key in input
@@ -214,6 +278,9 @@ async function initPopup(): Promise<void> {
     
     // Set up keyword management
     setupKeywordListeners();
+    
+    // Trigger refresh on popup open to ensure current page is up to date
+    await triggerContentRefresh();
     
     console.debug('Popup initialized');
   } catch (error) {
