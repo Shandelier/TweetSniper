@@ -20,8 +20,8 @@ const HEAT_MAP_CSS = `
   .views-3 { border-right: 5px solid #FFC2C2 !important; }
 `;
 let settings = { enabled: true };
-let observer = null;
 let styleElement = null;
+let scanInterval = null;
 function getViewsClass(viewCount) {
   for (const threshold of VIEW_THRESHOLDS) {
     if (viewCount >= threshold.min && viewCount <= threshold.max) {
@@ -47,30 +47,39 @@ function updateFireEmoji(timeElement, shouldAdd) {
     timeElement.textContent = textContent.replace("🔥 ", "");
   }
 }
+function getTargetContainer(articleEl) {
+  return articleEl.parentElement || articleEl;
+}
 function applyHeat(articleEl) {
   if (!settings.enabled) return;
   try {
+    const targetEl = getTargetContainer(articleEl);
     const viewsElement = articleEl.querySelector(
-      '[aria-label*=" views" i], [data-testid="viewCount"]'
+      'a[aria-label*=" views" i], [data-testid="viewCount"]'
     );
     if (viewsElement) {
       let rawCount = "";
-      const span = viewsElement.querySelector(".view-count");
-      if (span && span.textContent) {
-        rawCount = span.textContent.trim();
-      } else {
-        const label = viewsElement.getAttribute("aria-label") || "";
-        rawCount = label.trim().split(" ")[0];
-      }
+      const label = viewsElement.getAttribute("aria-label") || "";
+      rawCount = label.trim().split(" ")[0];
       const viewCount = parseViews(rawCount);
-      if (viewCount !== null) {
-        VIEW_THRESHOLDS.forEach((threshold) => {
-          articleEl.classList.remove(threshold.className);
-        });
-        const className = getViewsClass(viewCount);
-        if (className !== "views-0") {
-          articleEl.classList.add(className);
+      if (viewCount === null) {
+        return;
+      }
+      VIEW_THRESHOLDS.forEach((threshold) => {
+        targetEl.classList.remove(threshold.className);
+      });
+      const className = getViewsClass(viewCount);
+      if (className !== "views-0") {
+        targetEl.classList.add(className);
+        const userNamesEl = articleEl.querySelector('[data-testid="User-Names"]');
+        let userName = "unknown";
+        if (userNamesEl && userNamesEl.textContent) {
+          const handleLine = userNamesEl.textContent.split("\n").find((s) => s.startsWith("@"));
+          userName = handleLine || userNamesEl.textContent.split("\n")[0];
         }
+        console.log(
+          `Tweet Heat Map: Coloring tweet from ${userName} with ${className} (${viewCount} views)`
+        );
       }
     }
     const timeElement = articleEl.querySelector("time");
@@ -79,12 +88,12 @@ function applyHeat(articleEl) {
       updateFireEmoji(timeElement, isFresh);
     }
   } catch (error) {
-    console.debug("Tweet Heat Map: Error processing tweet", error);
   }
 }
 function removeHeat(articleEl) {
+  const targetEl = getTargetContainer(articleEl);
   VIEW_THRESHOLDS.forEach((threshold) => {
-    articleEl.classList.remove(threshold.className);
+    targetEl.classList.remove(threshold.className);
   });
   const timeElement = articleEl.querySelector("time");
   if (timeElement) {
@@ -101,40 +110,6 @@ function scanExisting() {
     }
   });
 }
-function observeNew() {
-  if (observer) return;
-  const targetNode = document.querySelector("main");
-  if (!targetNode) return;
-  observer = new MutationObserver((mutations) => {
-    const processChanges = () => {
-      mutations.forEach((mutation) => {
-        mutation.addedNodes.forEach((node) => {
-          if (node.nodeType !== Node.ELEMENT_NODE) return;
-          const element = node;
-          if (element.matches('article[data-testid="tweet"]')) {
-            if (settings.enabled) applyHeat(element);
-          }
-          element.querySelectorAll('article[data-testid="tweet"]').forEach((tweet) => {
-            if (settings.enabled) applyHeat(tweet);
-          });
-          const parentTweet = element.closest('article[data-testid="tweet"]');
-          if (parentTweet && settings.enabled) {
-            applyHeat(parentTweet);
-          }
-        });
-      });
-    };
-    if ("requestIdleCallback" in window) {
-      requestIdleCallback(processChanges);
-    } else {
-      setTimeout(processChanges, 0);
-    }
-  });
-  observer.observe(targetNode, {
-    childList: true,
-    subtree: true
-  });
-}
 function injectStyles() {
   if (styleElement) return;
   styleElement = document.createElement("style");
@@ -149,17 +124,22 @@ function removeStyles() {
   }
 }
 function updateExtensionState() {
+  if (scanInterval) {
+    clearInterval(scanInterval);
+    scanInterval = null;
+  }
   if (settings.enabled) {
     injectStyles();
-    scanExisting();
-    observeNew();
+    if (scanInterval === null) {
+      scanInterval = window.setInterval(scanExisting, 1e3);
+    }
   } else {
+    if (scanInterval !== null) {
+      clearInterval(scanInterval);
+      scanInterval = null;
+    }
     removeStyles();
     scanExisting();
-    if (observer) {
-      observer.disconnect();
-      observer = null;
-    }
   }
 }
 async function loadSettings() {
@@ -185,23 +165,34 @@ function setupStorageListener() {
 }
 function setupCleanup() {
   window.addEventListener("beforeunload", () => {
-    if (observer) {
-      observer.disconnect();
-      observer = null;
+    if (scanInterval) {
+      clearInterval(scanInterval);
+      scanInterval = null;
     }
   });
 }
 async function init() {
-  if (document.readyState === "loading") {
-    await new Promise((resolve) => {
-      document.addEventListener("DOMContentLoaded", resolve);
-    });
-  }
   await loadSettings();
   setupStorageListener();
   setupCleanup();
-  updateExtensionState();
-  console.debug("Tweet Heat Map: Initialized");
+  const runLogic = () => {
+    updateExtensionState();
+  };
+  const mainEl = document.querySelector("main");
+  if (mainEl) {
+    runLogic();
+  } else {
+    const initialObserver = new MutationObserver((mutations, obs) => {
+      if (document.querySelector("main")) {
+        obs.disconnect();
+        runLogic();
+      }
+    });
+    initialObserver.observe(document.body, {
+      childList: true,
+      subtree: true
+    });
+  }
 }
 init().catch((error) => {
   console.error("Tweet Heat Map: Initialization failed", error);
