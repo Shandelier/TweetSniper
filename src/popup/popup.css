@@ -143,15 +143,19 @@ body {
 }
 
 .views-1-demo {
-  background-color: #B4C6FF;
+  background-color: #4A90E2;
 }
 
 .views-2-demo {
-  background-color: #BDF4C4;
+  background-color: #F39C12;
 }
 
 .views-3-demo {
-  background-color: #FFC2C2;
+  background-color: #E67E22;
+}
+
+.views-4-demo {
+  background-color: #E74C3C;
 }
 
 .legend-text {

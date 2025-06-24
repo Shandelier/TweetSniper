@@ -9,17 +9,20 @@ interface Settings {
 
 // Color thresholds as defined in PRD
 const VIEW_THRESHOLDS = [
-  { min: 0, max: 1000, className: 'views-0' },
-  { min: 1001, max: 10000, className: 'views-1' },
-  { min: 10001, max: 50000, className: 'views-2' },
-  { min: 50001, max: 250000, className: 'views-3' },
+  { min: 0, max: 3000, className: 'views-0' },
+  { min: 3001, max: 15000, className: 'views-1' },
+  { min: 15001, max: 75000, className: 'views-2' },
+  { min: 75001, max: 300000, className: 'views-3' },
+  { min: 300001, max: Infinity, className: 'views-4' },
 ];
 
-// CSS for the heat map colors
+// CSS for the heat map colors - Cold to Hot progression
 const HEAT_MAP_CSS = `
-  .views-1 { border-right: 5px solid #B4C6FF !important; }
-  .views-2 { border-right: 5px solid #BDF4C4 !important; }
-  .views-3 { border-right: 5px solid #FFC2C2 !important; }
+  .views-1::before { content: ''; position: absolute; left: 0; top: 30px; bottom: 0px; width: 5px; background: #4A90E2; z-index: 10; }
+  .views-2::before { content: ''; position: absolute; left: 0; top: 30px; bottom: 0px; width: 5px; background: #F39C12; z-index: 10; }
+  .views-3::before { content: ''; position: absolute; left: 0; top: 30px; bottom: 0px; width: 5px; background: #E67E22; z-index: 10; }
+  .views-4::before { content: ''; position: absolute; left: 0; top: 30px; bottom: 0px; width: 5px; background: #E74C3C; z-index: 10; }
+  .views-1, .views-2, .views-3, .views-4 { position: relative; }
 `;
 
 let settings: Settings = { enabled: true };
