@@ -5,10 +5,10 @@
 }
 
 body {
-  width: 200px;
-  height: 300px;
+  width: 320px;
+  height: 450px;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  font-size: 12px;
+  font-size: 14px;
   line-height: 1.4;
   background: #ffffff;
   color: #1a1a1a;
@@ -16,7 +16,7 @@ body {
 }
 
 .popup-container {
-  padding: 12px;
+  padding: 16px;
   height: 100%;
   display: flex;
   flex-direction: column;
@@ -24,17 +24,17 @@ body {
 
 /* Header */
 .popup-header {
-  margin-bottom: 12px;
+  margin-bottom: 16px;
 }
 
 .popup-title {
-  font-size: 14px;
+  font-size: 18px;
   font-weight: 600;
-  margin-bottom: 2px;
+  margin-bottom: 4px;
 }
 
 .popup-subtitle {
-  font-size: 10px;
+  font-size: 12px;
   color: #666;
 }
 
@@ -43,13 +43,13 @@ body {
   flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 16px;
 }
 
 /* Toggle section */
 .toggle-section {
   border-bottom: 1px solid #e1e8ed;
-  padding-bottom: 10px;
+  padding-bottom: 16px;
 }
 
 .toggle-label {
@@ -57,17 +57,18 @@ body {
   justify-content: space-between;
   align-items: center;
   cursor: pointer;
+  padding: 8px 0;
 }
 
 .toggle-text {
-  font-size: 12px;
+  font-size: 14px;
   font-weight: 500;
 }
 
 .toggle-switch {
   position: relative;
-  width: 36px;
-  height: 20px;
+  width: 44px;
+  height: 24px;
 }
 
 .toggle-input {
@@ -83,7 +84,7 @@ body {
   right: 0;
   bottom: 0;
   background-color: #ccc;
-  border-radius: 20px;
+  border-radius: 24px;
   transition: 0.2s;
   cursor: pointer;
 }
@@ -91,8 +92,8 @@ body {
 .toggle-slider:before {
   position: absolute;
   content: "";
-  height: 16px;
-  width: 16px;
+  height: 20px;
+  width: 20px;
   left: 2px;
   bottom: 2px;
   background-color: white;
@@ -105,38 +106,39 @@ body {
 }
 
 .toggle-input:checked + .toggle-slider:before {
-  transform: translateX(16px);
+  transform: translateX(20px);
 }
 
 /* Legend section */
 .legend-section {
   border-bottom: 1px solid #e1e8ed;
-  padding-bottom: 8px;
+  padding-bottom: 16px;
 }
 
 .legend-title {
-  font-size: 11px;
+  font-size: 13px;
   font-weight: 600;
-  margin-bottom: 6px;
+  margin-bottom: 10px;
   color: #333;
 }
 
 .legend-items {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 6px;
 }
 
 .legend-item {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 10px;
+  padding: 4px 0;
 }
 
 .legend-color {
-  width: 12px;
-  height: 12px;
-  border-radius: 2px;
+  width: 16px;
+  height: 16px;
+  border-radius: 3px;
   border: 1px solid #e1e8ed;
 }
 
@@ -153,7 +155,7 @@ body {
 }
 
 .legend-text {
-  font-size: 10px;
+  font-size: 12px;
   color: #666;
 }
 
@@ -162,46 +164,50 @@ body {
   flex: 1;
   display: flex;
   flex-direction: column;
+  min-height: 0;
 }
 
 .keywords-title {
-  font-size: 11px;
+  font-size: 13px;
   font-weight: 600;
-  margin-bottom: 6px;
+  margin-bottom: 10px;
   color: #333;
 }
 
 .keyword-input {
   display: flex;
-  gap: 4px;
-  margin-bottom: 8px;
+  gap: 8px;
+  margin-bottom: 12px;
 }
 
 #keyword-input {
   flex: 1;
-  padding: 4px 6px;
+  padding: 8px 12px;
   border: 1px solid #e1e8ed;
-  border-radius: 3px;
-  font-size: 10px;
+  border-radius: 6px;
+  font-size: 13px;
   outline: none;
 }
 
 #keyword-input:focus {
   border-color: #1da1f2;
+  box-shadow: 0 0 0 2px rgba(29, 161, 242, 0.1);
 }
 
 .btn-add {
-  width: 20px;
-  height: 20px;
+  width: 36px;
+  height: 36px;
   border: none;
-  border-radius: 3px;
+  border-radius: 6px;
   background: #1da1f2;
   color: white;
-  font-size: 12px;
+  font-size: 16px;
+  font-weight: bold;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
+  transition: background-color 0.2s;
 }
 
 .btn-add:hover {
@@ -211,19 +217,43 @@ body {
 .keyword-list {
   display: flex;
   flex-direction: column;
-  gap: 3px;
-  max-height: 60px;
+  gap: 6px;
+  max-height: 140px;
   overflow-y: auto;
+  padding-right: 4px;
+}
+
+.keyword-list::-webkit-scrollbar {
+  width: 6px;
+}
+
+.keyword-list::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 3px;
+}
+
+.keyword-list::-webkit-scrollbar-thumb {
+  background: #c1c1c1;
+  border-radius: 3px;
+}
+
+.keyword-list::-webkit-scrollbar-thumb:hover {
+  background: #a8a8a8;
 }
 
 .keyword-item {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 3px 6px;
+  padding: 8px 12px;
   background: #f7f9fa;
-  border-radius: 3px;
-  font-size: 10px;
+  border-radius: 6px;
+  font-size: 13px;
+  transition: background-color 0.2s;
+}
+
+.keyword-item:hover {
+  background: #f0f3f4;
 }
 
 .keyword-text {
@@ -231,13 +261,15 @@ body {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  margin-right: 8px;
 }
 
 .keyword-color {
-  width: 8px;
-  height: 8px;
+  width: 12px;
+  height: 12px;
   border-radius: 50%;
-  margin-left: 4px;
+  margin-left: 8px;
+  border: 1px solid rgba(0, 0, 0, 0.1);
 }
 
 .btn-remove {
@@ -245,18 +277,21 @@ body {
   border: none;
   color: #999;
   cursor: pointer;
-  padding: 0;
-  margin-left: 4px;
-  font-size: 10px;
-  width: 12px;
-  height: 12px;
+  padding: 4px;
+  margin-left: 8px;
+  font-size: 14px;
+  width: 20px;
+  height: 20px;
   display: flex;
   align-items: center;
   justify-content: center;
+  border-radius: 4px;
+  transition: all 0.2s;
 }
 
 .btn-remove:hover {
   color: #ff4444;
+  background: rgba(255, 68, 68, 0.1);
 }
 
 /* Hover effects */
@@ -266,4 +301,14 @@ body {
 
 .legend-item:hover .legend-text {
   color: #333;
+}
+
+/* Empty state for keyword list */
+.keyword-list:empty::after {
+  content: "No keywords added yet";
+  color: #999;
+  font-style: italic;
+  font-size: 12px;
+  text-align: center;
+  padding: 20px;
 } 
