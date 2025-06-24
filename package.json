@@ -4,8 +4,8 @@
   "description": "Color-codes tweets by view-count and flags fresh ones with 🔥",
   "main": "index.js",
   "scripts": {
-    "build": "vite build",
-    "dev": "vite build --watch",
+    "build": "node build.js",
+    "dev": "node build.js --watch",
     "lint": "eslint src/**/*.ts",
     "test": "jest",
     "format": "prettier --write src/**/*.{ts,html,css}"

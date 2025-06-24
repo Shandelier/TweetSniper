@@ -91,6 +91,15 @@ dist/                  # Built extension (generated)
 - **Linting**: ESLint with TypeScript rules
 - **Target Browsers**: Chrome 120+, Opera 95+, Brave, Edge
 
+### A Note on Dynamic DOM
+
+When developing for the current Twitter/X interface, be aware that the DOM is extremely dynamic. The front-end frequently re-renders entire components, which can wipe out any direct manipulations (like adding a CSS class).
+
+Key solutions implemented in this extension:
+
+1.  **Target Stable Containers:** Instead of applying the `views-*` class directly to the `<article data-testid="tweet">` element, it is applied to its parent `<div>`. This parent container is less likely to be re-rendered on user interaction (e.g., hover), preventing the custom class from being removed.
+2.  **Use a Robust `MutationObserver`:** The content script observes the central `<main>` timeline for both `childList` and `attributes` changes. This ensures that styling is re-applied correctly whenever a tweet is added or its attributes (like `class`) are modified by Twitter's own scripts.
+
 ## Permissions
 
 - `activeTab` - Access current tab content

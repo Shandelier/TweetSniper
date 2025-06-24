@@ -1,7 +1,7 @@
 // Tweet Heat Map - Content Script
 // Color-codes tweets by view-count and flags fresh ones with 🔥
 
-import { parseViews } from './utils.js';
+import { parseViews, Keyword, highlightKeywords, removeKeywordHighlights } from './utils.js';
 
 interface Settings {
   enabled: boolean;
@@ -23,6 +23,7 @@ const HEAT_MAP_CSS = `
 `;
 
 let settings: Settings = { enabled: true };
+let keywords: Keyword[] = [];
 let observer: MutationObserver | null = null;
 let styleElement: HTMLStyleElement | null = null;
 
@@ -75,7 +76,7 @@ function getTargetContainer(articleEl: HTMLElement): HTMLElement {
 }
 
 /**
- * Apply heat map styling to a tweet article element
+ * Apply heat map styling and keyword highlighting to a tweet article element
  */
 function applyHeat(articleEl: HTMLElement): void {
   if (!settings.enabled) return;
@@ -83,7 +84,7 @@ function applyHeat(articleEl: HTMLElement): void {
   try {
     const targetEl = getTargetContainer(articleEl);
 
-    // This selector is now more specific to avoid matching the parent group.
+    // Heat map styling
     const viewsElement = articleEl.querySelector(
       'a[aria-label*=" views" i], [data-testid="viewCount"]'
     );
@@ -117,13 +118,19 @@ function applyHeat(articleEl: HTMLElement): void {
       const isFresh = isTweetFresh(timeElement);
       updateFireEmoji(timeElement, isFresh);
     }
+
+    // Apply keyword highlighting to tweet text
+    const tweetTextElement = articleEl.querySelector('[data-testid="tweetText"]');
+    if (tweetTextElement && keywords.length > 0) {
+      highlightKeywords(tweetTextElement as HTMLElement, keywords);
+    }
   } catch (error) {
     // Silent catch
   }
 }
 
 /**
- * Remove heat map styling from a tweet
+ * Remove heat map styling and keyword highlights from a tweet
  */
 function removeHeat(articleEl: HTMLElement): void {
   const targetEl = getTargetContainer(articleEl);
@@ -137,6 +144,12 @@ function removeHeat(articleEl: HTMLElement): void {
   const timeElement = articleEl.querySelector('time') as HTMLTimeElement;
   if (timeElement) {
     updateFireEmoji(timeElement, false);
+  }
+
+  // Remove keyword highlights
+  const tweetTextElement = articleEl.querySelector('[data-testid="tweetText"]');
+  if (tweetTextElement) {
+    removeKeywordHighlights(tweetTextElement as HTMLElement);
   }
 }
 
@@ -263,14 +276,40 @@ async function loadSettings(): Promise<void> {
 }
 
 /**
- * Listen for settings changes
+ * Load keywords from chrome.storage
+ */
+async function loadKeywords(): Promise<void> {
+  try {
+    const result = await chrome.storage.sync.get(['thm-keywords']);
+    keywords = result['thm-keywords'] || [];
+  } catch (error) {
+    console.debug('Tweet Heat Map: Error loading keywords', error);
+  }
+}
+
+/**
+ * Listen for settings and keyword changes
  */
 function setupStorageListener(): void {
   chrome.storage.onChanged.addListener((changes, namespace) => {
-    if (namespace === 'sync' && changes['thm-settings']) {
-      const newSettings = changes['thm-settings'].newValue;
-      if (newSettings) {
-        settings = { ...settings, ...newSettings };
+    if (namespace === 'sync') {
+      let shouldUpdate = false;
+      
+      if (changes['thm-settings']) {
+        const newSettings = changes['thm-settings'].newValue;
+        if (newSettings) {
+          settings = { ...settings, ...newSettings };
+          shouldUpdate = true;
+        }
+      }
+      
+      if (changes['thm-keywords']) {
+        const newKeywords = changes['thm-keywords'].newValue;
+        keywords = newKeywords || [];
+        shouldUpdate = true;
+      }
+      
+      if (shouldUpdate) {
         updateExtensionState();
       }
     }
@@ -294,6 +333,7 @@ function setupCleanup(): void {
  */
 async function init(): Promise<void> {
   await loadSettings();
+  await loadKeywords();
   setupStorageListener();
   setupCleanup();
 
