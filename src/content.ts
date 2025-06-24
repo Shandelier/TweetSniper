@@ -124,8 +124,14 @@ function applyHeat(articleEl: HTMLElement): void {
 
     // Apply keyword highlighting to tweet text
     const tweetTextElement = articleEl.querySelector('[data-testid="tweetText"]');
-    if (tweetTextElement && keywords.length > 0) {
-      highlightKeywords(tweetTextElement as HTMLElement, keywords);
+    if (tweetTextElement) {
+      // Always remove existing highlights first to ensure clean state
+      removeKeywordHighlights(tweetTextElement as HTMLElement);
+      
+      // Then apply current keywords if any exist
+      if (keywords.length > 0) {
+        highlightKeywords(tweetTextElement as HTMLElement, keywords);
+      }
     }
   } catch (error) {
     // Silent catch
@@ -168,6 +174,25 @@ function scanExisting(): void {
       removeHeat(tweet as HTMLElement);
     }
   });
+}
+
+/**
+ * Force complete refresh of all tweets - removes all effects and reapplies them
+ */
+function forceCompleteRefresh(): void {
+  const tweets = document.querySelectorAll('article[data-testid="tweet"]');
+  
+  // First pass: completely clean all tweets
+  tweets.forEach(tweet => {
+    removeHeat(tweet as HTMLElement);
+  });
+  
+  // Second pass: reapply effects if enabled
+  if (settings.enabled) {
+    tweets.forEach(tweet => {
+      applyHeat(tweet as HTMLElement);
+    });
+  }
 }
 
 /**
@@ -297,6 +322,7 @@ function setupStorageListener(): void {
   chrome.storage.onChanged.addListener((changes, namespace) => {
     if (namespace === 'sync') {
       let shouldUpdate = false;
+      let keywordsChanged = false;
       
       if (changes['thm-settings']) {
         const newSettings = changes['thm-settings'].newValue;
@@ -309,11 +335,18 @@ function setupStorageListener(): void {
       if (changes['thm-keywords']) {
         const newKeywords = changes['thm-keywords'].newValue;
         keywords = newKeywords || [];
+        keywordsChanged = true;
         shouldUpdate = true;
       }
       
       if (shouldUpdate) {
-        updateExtensionState();
+        if (keywordsChanged) {
+          // When keywords change, force complete refresh to ensure clean state
+          forceCompleteRefresh();
+        } else {
+          // For other settings changes, use normal update
+          updateExtensionState();
+        }
       }
     }
   });
@@ -327,8 +360,8 @@ function setupMessageListener(): void {
     if (message.action === 'forceRefresh') {
       console.debug('Tweet Heat Map: Received force refresh request from popup');
       
-      // Force immediate refresh
-      updateExtensionState();
+      // Force complete refresh instead of just updateExtensionState
+      forceCompleteRefresh();
       
       // Send acknowledgment
       sendResponse({ success: true });

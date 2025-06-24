@@ -110,15 +110,37 @@ export function highlightKeywords(element: HTMLElement, keywords: Keyword[]): vo
  * Remove all keyword highlights from an element
  */
 export function removeKeywordHighlights(element: HTMLElement): void {
+  // First, remove all mark elements by replacing them with their text content
   const marks = element.querySelectorAll('mark');
   marks.forEach(mark => {
     const textNode = document.createTextNode(mark.textContent || '');
     mark.parentNode?.replaceChild(textNode, mark);
   });
   
-  // Clean up any empty spans created by highlighting
-  const spans = element.querySelectorAll('span:empty');
-  spans.forEach(span => span.remove());
+  // Then normalize the text nodes to merge adjacent text nodes
+  element.normalize();
+  
+  // Find spans that were created by highlighting and contain only text
+  const spans = element.querySelectorAll('span');
+  spans.forEach(span => {
+    // Check if this span was likely created by our highlighting
+    // (contains only text nodes and no other elements)
+    const hasOnlyTextContent = Array.from(span.childNodes).every(
+      node => node.nodeType === Node.TEXT_NODE
+    );
+    
+    if (hasOnlyTextContent && span.textContent) {
+      // Replace the span with its text content
+      const textNode = document.createTextNode(span.textContent);
+      span.parentNode?.replaceChild(textNode, span);
+    } else if (span.textContent === '') {
+      // Remove empty spans
+      span.remove();
+    }
+  });
+  
+  // Final normalization to clean up any fragmented text nodes
+  element.normalize();
 }
 
 /**
