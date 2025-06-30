@@ -1,11 +1,31 @@
 // Tweet Heat Map - Content Script
 // Color-codes tweets by view-count and flags fresh ones with 🔥
 
-import { parseViews, Keyword, highlightKeywords, removeKeywordHighlights } from './utils.js';
+import { parseViews, parseCount, Keyword, highlightKeywords, removeKeywordHighlights } from './utils.js';
 
 interface Settings {
   enabled: boolean;
+  indicatorMode: 'views' | 'breakout';
+  breakoutMaxViews?: number;
+  breakoutMaxAge?: number;
 }
+
+interface TweetMetrics {
+  replies: number;
+  reposts: number;
+  likes: number;
+  views: number;
+  ageMin: number;
+}
+
+interface TweetState {
+  firstSeen: number;
+  lastMetrics: TweetMetrics;
+  lastSeen: number;
+}
+
+// Per-tweet state management
+const tweetStats = new Map<string, TweetState>();
 
 // Color thresholds as defined in PRD
 const VIEW_THRESHOLDS = [
@@ -23,9 +43,20 @@ const HEAT_MAP_CSS = `
   .views-3::before { content: ''; position: absolute; left: 0; top: 30px; bottom: 0px; width: 5px; background: #E67E22; z-index: 10; }
   .views-4::before { content: ''; position: absolute; left: 0; top: 30px; bottom: 0px; width: 5px; background: #E74C3C; z-index: 10; }
   .views-1, .views-2, .views-3, .views-4 { position: relative; }
+  
+  /* Breakout indicators - thicker bar (7px) for visibility */
+  .breakout-hot::before { content: ''; position: absolute; left: 0; top: 30px; bottom: 0px; width: 7px; background: #FF1E1E; z-index: 10; }
+  .breakout-warm::before { content: ''; position: absolute; left: 0; top: 30px; bottom: 0px; width: 7px; background: #FFC300; z-index: 10; }
+  .breakout-watch::before { content: ''; position: absolute; left: 0; top: 30px; bottom: 0px; width: 7px; background: #4A90E2; z-index: 10; }
+  .breakout-hot, .breakout-warm, .breakout-watch { position: relative; }
 `;
 
-let settings: Settings = { enabled: true };
+let settings: Settings = { 
+  enabled: true, 
+  indicatorMode: 'views',
+  breakoutMaxViews: 100000,
+  breakoutMaxAge: 120
+};
 let keywords: Keyword[] = [];
 let observer: MutationObserver | null = null;
 let styleElement: HTMLStyleElement | null = null;
@@ -79,6 +110,96 @@ function getTargetContainer(articleEl: HTMLElement): HTMLElement {
 }
 
 /**
+ * Extract tweet ID from article element
+ */
+function getTweetId(articleEl: HTMLElement): string | null {
+  const link = articleEl.querySelector('a[href*="/status/"]');
+  if (!link) return null;
+  
+  const href = link.getAttribute('href');
+  if (!href) return null;
+  
+  const match = href.match(/\/status\/(\d+)/);
+  return match ? match[1] : null;
+}
+
+/**
+ * Extract engagement metrics from tweet
+ */
+function extractMetrics(articleEl: HTMLElement): TweetMetrics | null {
+  try {
+    // Find the group with engagement metrics
+    const metricsGroup = articleEl.querySelector('[role="group"][aria-label]');
+    if (!metricsGroup) return null;
+    
+    const ariaLabel = metricsGroup.getAttribute('aria-label') || '';
+    
+    // Parse engagement metrics from aria-label
+    // Format can be: "22 replies, 23 reposts, 360 likes, 22399 views" or
+    // "126 comments, 24 retweets, 199 likes, 6186 views"
+    const repliesMatch = ariaLabel.match(/(\d+(?:,\d+)*(?:\.\d+)?(?:\s*[KkMmBb])?)\s*(?:repl|comment)/i);
+    const repostsMatch = ariaLabel.match(/(\d+(?:,\d+)*(?:\.\d+)?(?:\s*[KkMmBb])?)\s*(?:repost|retweet)/i);
+    const likesMatch = ariaLabel.match(/(\d+(?:,\d+)*(?:\.\d+)?(?:\s*[KkMmBb])?)\s*like/i);
+    const viewsMatch = ariaLabel.match(/(\d+(?:,\d+)*(?:\.\d+)?(?:\s*[KkMmBb])?)\s*view/i);
+    
+    const replies = repliesMatch ? parseCount(repliesMatch[1]) || 0 : 0;
+    const reposts = repostsMatch ? parseCount(repostsMatch[1]) || 0 : 0;
+    const likes = likesMatch ? parseCount(likesMatch[1]) || 0 : 0;
+    const views = viewsMatch ? parseCount(viewsMatch[1]) || 0 : 0;
+    
+    // Calculate tweet age
+    const timeElement = articleEl.querySelector('time') as HTMLTimeElement;
+    if (!timeElement) return null;
+    
+    const datetime = timeElement.getAttribute('datetime');
+    if (!datetime) return null;
+    
+    const tweetTime = new Date(datetime);
+    const now = new Date();
+    const ageMin = Math.max(0, (now.getTime() - tweetTime.getTime()) / (1000 * 60));
+    
+    return { replies, reposts, likes, views, ageMin };
+  } catch (error) {
+    return null;
+  }
+}
+
+/**
+ * Calculate breakout score
+ */
+function getBreakoutScore(metrics: TweetMetrics): number {
+  // S = (1.2*R + 1.5*Q + 1.0*L) / (t+1)^1.15
+  // Reduced time penalty from 1.3 to 1.15 for less aggressive decay
+  const numerator = 1.2 * metrics.replies + 1.5 * metrics.reposts + 1.0 * metrics.likes;
+  const denominator = Math.pow(metrics.ageMin + 1, 1.15);
+  return numerator / denominator;
+}
+
+/**
+ * Get breakout class based on score
+ */
+function getBreakoutClass(score: number): string | null {
+  if (score >= 3) return 'breakout-hot';    // Was 8
+  if (score >= 1.5) return 'breakout-warm'; // Was 4
+  if (score >= 0.5) return 'breakout-watch'; // Was 2
+  return null;
+}
+
+/**
+ * Clean up old tweet stats to prevent memory leak
+ */
+function cleanupOldStats(): void {
+  const now = Date.now();
+  const fourHoursMs = 4 * 60 * 60 * 1000;
+  
+  for (const [tweetId, stats] of tweetStats.entries()) {
+    if (now - stats.firstSeen > fourHoursMs) {
+      tweetStats.delete(tweetId);
+    }
+  }
+}
+
+/**
  * Apply heat map styling and keyword highlighting to a tweet article element
  */
 function applyHeat(articleEl: HTMLElement): void {
@@ -86,32 +207,79 @@ function applyHeat(articleEl: HTMLElement): void {
 
   try {
     const targetEl = getTargetContainer(articleEl);
-
-    // Heat map styling
-    const viewsElement = articleEl.querySelector(
-      'a[aria-label*=" views" i], [data-testid="viewCount"]'
-    );
-
-    if (viewsElement) {
-      let rawCount = '';
-      const label = viewsElement.getAttribute('aria-label') || '';
-      rawCount = label.trim().split(' ')[0];
-
-      const viewCount = parseViews(rawCount);
-
-      if (viewCount === null) {
-        return; // Not a parsable number
-      }
-
-      // Remove existing view classes
-      VIEW_THRESHOLDS.forEach(threshold => {
-        targetEl.classList.remove(threshold.className);
+    
+    // Get tweet ID for state tracking
+    const tweetId = getTweetId(articleEl);
+    if (!tweetId) return;
+    
+    // Extract metrics
+    const metrics = extractMetrics(articleEl);
+    if (!metrics) return;
+    
+    // Update tweet state
+    const now = Date.now();
+    if (!tweetStats.has(tweetId)) {
+      tweetStats.set(tweetId, {
+        firstSeen: now,
+        lastMetrics: metrics,
+        lastSeen: now
       });
-
-      // Add appropriate class
-      const className = getViewsClass(viewCount);
-      if (className !== 'views-0') {
-        targetEl.classList.add(className);
+    } else {
+      const state = tweetStats.get(tweetId)!;
+      state.lastMetrics = metrics;
+      state.lastSeen = now;
+    }
+    
+    // Remove all existing classes
+    VIEW_THRESHOLDS.forEach(threshold => {
+      targetEl.classList.remove(threshold.className);
+    });
+    targetEl.classList.remove('breakout-hot', 'breakout-warm', 'breakout-watch');
+    
+    // Apply indicator based on selected mode
+    if (settings.indicatorMode === 'breakout') {
+      // Breakout mode: Check guard rails first
+      if (metrics.views > (settings.breakoutMaxViews || 100000) || 
+          metrics.ageMin > (settings.breakoutMaxAge || 120)) {
+        // Tweet is too old or too popular for breakout detection
+        // Don't apply any indicator
+      } else {
+        // Calculate breakout score
+        const score = getBreakoutScore(metrics);
+        const breakoutClass = getBreakoutClass(score);
+        
+        if (breakoutClass) {
+          targetEl.classList.add(breakoutClass);
+        }
+      }
+    } else {
+      // Views mode: Apply traditional view-based classes
+      // Try to use extracted metrics first
+      if (metrics.views > 0) {
+        const className = getViewsClass(metrics.views);
+        if (className !== 'views-0') {
+          targetEl.classList.add(className);
+        }
+      } else {
+        // Fallback to original view extraction method
+        const viewsElement = articleEl.querySelector(
+          'a[aria-label*=" views" i], [data-testid="viewCount"]'
+        );
+        
+        if (viewsElement) {
+          let rawCount = '';
+          const label = viewsElement.getAttribute('aria-label') || '';
+          rawCount = label.trim().split(' ')[0];
+          
+          const viewCount = parseViews(rawCount);
+          
+          if (viewCount !== null && viewCount > 0) {
+            const className = getViewsClass(viewCount);
+            if (className !== 'views-0') {
+              targetEl.classList.add(className);
+            }
+          }
+        }
       }
     }
 
@@ -126,6 +294,11 @@ function applyHeat(articleEl: HTMLElement): void {
     const tweetTextElement = articleEl.querySelector('[data-testid="tweetText"]');
     if (tweetTextElement && keywords.length > 0) {
       highlightKeywords(tweetTextElement as HTMLElement, keywords);
+    }
+    
+    // Periodically clean up old stats
+    if (Math.random() < 0.01) { // 1% chance on each call
+      cleanupOldStats();
     }
   } catch (error) {
     // Silent catch
@@ -142,6 +315,9 @@ function removeHeat(articleEl: HTMLElement): void {
   VIEW_THRESHOLDS.forEach(threshold => {
     targetEl.classList.remove(threshold.className);
   });
+  
+  // Remove breakout classes
+  targetEl.classList.remove('breakout-hot', 'breakout-warm', 'breakout-watch');
 
   // Remove fire emoji
   const timeElement = articleEl.querySelector('time') as HTMLTimeElement;
@@ -320,6 +496,32 @@ function setupStorageListener(): void {
 }
 
 /**
+ * Listen for messages from popup
+ */
+function setupMessageListener(): void {
+  chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+    if (message.type === 'MODE_CHANGED') {
+      // Update settings immediately
+      settings.indicatorMode = message.indicatorMode;
+      
+      // Force repaint of all tweets
+      scanExisting();
+      
+      sendResponse({ success: true });
+    } else if (message.type === 'SETTINGS_CHANGED' || message.type === 'settingsChanged') {
+      // Update settings immediately
+      settings = { ...settings, ...message.settings };
+      
+      // Force repaint of all tweets
+      scanExisting();
+      
+      sendResponse({ success: true });
+    }
+    return true; // Keep message channel open for async response
+  });
+}
+
+/**
  * Clean up when page unloads
  */
 function setupCleanup(): void {
@@ -338,6 +540,7 @@ async function init(): Promise<void> {
   await loadSettings();
   await loadKeywords();
   setupStorageListener();
+  setupMessageListener();
   setupCleanup();
 
   const runLogic = () => {

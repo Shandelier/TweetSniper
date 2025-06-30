@@ -5,6 +5,9 @@ import { Keyword, getNextKeywordColor } from '../utils.js';
 
 interface Settings {
   enabled: boolean;
+  indicatorMode?: 'views' | 'breakout';
+  breakoutMaxViews?: number;
+  breakoutMaxAge?: number;
 }
 
 const SETTINGS_KEY = 'thm-settings';
@@ -16,10 +19,20 @@ const KEYWORDS_KEY = 'thm-keywords';
 async function loadSettings(): Promise<Settings> {
   try {
     const result = await chrome.storage.sync.get([SETTINGS_KEY]);
-    return result[SETTINGS_KEY] || { enabled: true };
+    return result[SETTINGS_KEY] || { 
+      enabled: true, 
+      indicatorMode: 'views',
+      breakoutMaxViews: 100000,
+      breakoutMaxAge: 120
+    };
   } catch (error) {
     console.error('Error loading settings:', error);
-    return { enabled: true };
+    return { 
+      enabled: true, 
+      indicatorMode: 'views',
+      breakoutMaxViews: 100000,
+      breakoutMaxAge: 120
+    };
   }
 }
 
@@ -69,15 +82,96 @@ function updateToggleUI(enabled: boolean): void {
 }
 
 /**
+ * Update the mode selector UI state
+ */
+function updateModeUI(mode: 'views' | 'breakout'): void {
+  const viewsRadio = document.getElementById('mode-views') as HTMLInputElement;
+  const breakoutRadio = document.getElementById('mode-breakout') as HTMLInputElement;
+  
+  if (viewsRadio && breakoutRadio) {
+    viewsRadio.checked = mode === 'views';
+    breakoutRadio.checked = mode === 'breakout';
+  }
+  
+  // Toggle legend visibility
+  const viewsLegend = document.getElementById('views-legend');
+  const breakoutLegend = document.getElementById('breakout-legend');
+  
+  if (viewsLegend && breakoutLegend) {
+    viewsLegend.style.display = mode === 'views' ? 'block' : 'none';
+    breakoutLegend.style.display = mode === 'breakout' ? 'block' : 'none';
+  }
+}
+
+/**
+ * Format views count for display
+ */
+function formatViews(views: number): string {
+  if (views >= 1000000) {
+    return `${(views / 1000000).toFixed(1)}M`;
+  } else if (views >= 1000) {
+    return `${Math.floor(views / 1000)}K`;
+  }
+  return views.toString();
+}
+
+/**
+ * Format minutes to hours/minutes
+ */
+function formatMinutes(minutes: number): string {
+  if (minutes >= 60) {
+    const hours = Math.floor(minutes / 60);
+    const mins = minutes % 60;
+    return mins > 0 ? `${hours}h ${mins}m` : `${hours}h`;
+  }
+  return `${minutes}m`;
+}
+
+/**
+ * Update guard rail UI
+ */
+function updateGuardRailUI(settings: Settings): void {
+  const maxViewsSlider = document.getElementById('max-views-slider') as HTMLInputElement;
+  const maxAgeSlider = document.getElementById('max-age-slider') as HTMLInputElement;
+  const maxViewsValue = document.getElementById('max-views-value');
+  const maxAgeValue = document.getElementById('max-age-value');
+  
+  if (maxViewsSlider && maxViewsValue) {
+    maxViewsSlider.value = (settings.breakoutMaxViews || 100000).toString();
+    maxViewsValue.textContent = formatViews(settings.breakoutMaxViews || 100000);
+  }
+  
+  if (maxAgeSlider && maxAgeValue) {
+    maxAgeSlider.value = (settings.breakoutMaxAge || 120).toString();
+    maxAgeValue.textContent = formatMinutes(settings.breakoutMaxAge || 120);
+  }
+}
+
+/**
  * Handle toggle change
  */
 async function handleToggleChange(event: Event): Promise<void> {
   const toggle = event.target as HTMLInputElement;
+  const currentSettings = await loadSettings();
   const settings: Settings = {
+    ...currentSettings,
     enabled: toggle.checked
   };
   
   await saveSettings(settings);
+  
+  // Notify content script to repaint timeline
+  try {
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (tab.id) {
+      await chrome.tabs.sendMessage(tab.id, {
+        type: 'SETTINGS_CHANGED',
+        settings: settings
+      });
+    }
+  } catch (error) {
+    console.debug('Could not notify content script:', error);
+  }
   
   // Update badge icon to reflect state (optional enhancement)
   try {
@@ -87,6 +181,35 @@ async function handleToggleChange(event: Event): Promise<void> {
   } catch (error) {
     // Icon change is optional, don't fail if it doesn't work
     console.debug('Could not update icon:', error);
+  }
+}
+
+/**
+ * Handle mode change
+ */
+async function handleModeChange(event: Event): Promise<void> {
+  const radio = event.target as HTMLInputElement;
+  const currentSettings = await loadSettings();
+  const settings: Settings = {
+    ...currentSettings,
+    indicatorMode: radio.value as 'views' | 'breakout'
+  };
+  
+  await saveSettings(settings);
+  updateModeUI(settings.indicatorMode!);
+  
+  // Notify content script to repaint timeline
+  try {
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (tab.id) {
+      await chrome.tabs.sendMessage(tab.id, {
+        type: 'MODE_CHANGED',
+        indicatorMode: settings.indicatorMode
+      });
+    }
+  } catch (error) {
+    // Content script might not be loaded, that's okay
+    console.debug('Could not notify content script:', error);
   }
 }
 
@@ -194,6 +317,46 @@ function setupKeywordListeners(): void {
 }
 
 /**
+ * Handle guard rail changes
+ */
+async function handleGuardRailChange(): Promise<void> {
+  const maxViewsSlider = document.getElementById('max-views-slider') as HTMLInputElement;
+  const maxAgeSlider = document.getElementById('max-age-slider') as HTMLInputElement;
+  const maxViewsValue = document.getElementById('max-views-value');
+  const maxAgeValue = document.getElementById('max-age-value');
+  
+  const currentSettings = await loadSettings();
+  const settings: Settings = {
+    ...currentSettings,
+    breakoutMaxViews: parseInt(maxViewsSlider.value),
+    breakoutMaxAge: parseInt(maxAgeSlider.value)
+  };
+  
+  // Update display values
+  if (maxViewsValue) {
+    maxViewsValue.textContent = formatViews(settings.breakoutMaxViews!);
+  }
+  if (maxAgeValue) {
+    maxAgeValue.textContent = formatMinutes(settings.breakoutMaxAge!);
+  }
+  
+  await saveSettings(settings);
+  
+  // Send message to content script to trigger repaint
+  try {
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (tab.id) {
+      await chrome.tabs.sendMessage(tab.id, { 
+        type: 'settingsChanged',
+        settings: settings
+      });
+    }
+  } catch (error) {
+    console.debug('Could not send message to content script:', error);
+  }
+}
+
+/**
  * Initialize the popup
  */
 async function initPopup(): Promise<void> {
@@ -204,12 +367,30 @@ async function initPopup(): Promise<void> {
     
     // Update UI
     updateToggleUI(settings.enabled);
+    updateModeUI(settings.indicatorMode || 'views');
+    updateGuardRailUI(settings);
     renderKeywords(keywords);
     
     // Set up toggle listener
     const toggle = document.getElementById('enabled-toggle') as HTMLInputElement;
     if (toggle) {
       toggle.addEventListener('change', handleToggleChange);
+    }
+    
+    // Set up mode listeners
+    const modeRadios = document.querySelectorAll('input[name="indicator-mode"]');
+    modeRadios.forEach(radio => {
+      radio.addEventListener('change', handleModeChange);
+    });
+    
+    // Set up guard rail sliders
+    const maxViewsSlider = document.getElementById('max-views-slider') as HTMLInputElement;
+    const maxAgeSlider = document.getElementById('max-age-slider') as HTMLInputElement;
+    if (maxViewsSlider) {
+      maxViewsSlider.addEventListener('input', handleGuardRailChange);
+    }
+    if (maxAgeSlider) {
+      maxAgeSlider.addEventListener('input', handleGuardRailChange);
     }
     
     // Set up keyword management

@@ -3,9 +3,17 @@
  * Handles formats: "1,234", "5.6 K", "1.2 M"
  */
 export function parseViews(text: string): number | null {
+  return parseCount(text);
+}
+
+/**
+ * Generic count parser that handles various formats
+ * Handles formats: "1,234", "5.6 K", "1.2 M", "1.5 B"
+ */
+export function parseCount(text: string): number | null {
   if (!text) return null;
   
-  const match = text.match(/^([\d,.]+)\s*([KkMm])?$/);
+  const match = text.match(/^([\d,.]+)\s*([KkMmBb])?$/);
   if (!match) return null;
   
   const [, numberStr, suffix] = match;
@@ -13,7 +21,14 @@ export function parseViews(text: string): number | null {
   
   if (isNaN(baseNumber)) return null;
   
-  const multiplier = suffix ? (suffix.toLowerCase() === 'k' ? 1000 : 1000000) : 1;
+  let multiplier = 1;
+  if (suffix) {
+    const lowerSuffix = suffix.toLowerCase();
+    if (lowerSuffix === 'k') multiplier = 1000;
+    else if (lowerSuffix === 'm') multiplier = 1000000;
+    else if (lowerSuffix === 'b') multiplier = 1000000000;
+  }
+  
   return Math.floor(baseNumber * multiplier);
 }
 

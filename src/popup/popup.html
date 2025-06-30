@@ -22,9 +22,23 @@
             <span class="toggle-slider"></span>
           </div>
         </label>
+        
+        <div class="mode-selector">
+          <h3 class="mode-title">Indicator Mode</h3>
+          <div class="mode-options">
+            <label class="mode-option">
+              <input type="radio" name="indicator-mode" value="views" id="mode-views" checked>
+              <span class="mode-text">View Count</span>
+            </label>
+            <label class="mode-option">
+              <input type="radio" name="indicator-mode" value="breakout" id="mode-breakout">
+              <span class="mode-text">Break-out Detection</span>
+            </label>
+          </div>
+        </div>
       </div>
       
-      <div class="legend-section">
+      <div class="legend-section" id="views-legend">
         <h3 class="legend-title">View Count Legend</h3>
         <div class="legend-items">
           <div class="legend-item">
@@ -42,6 +56,40 @@
           <div class="legend-item">
             <div class="legend-color views-4-demo"></div>
             <span class="legend-text">300K+ views</span>
+          </div>
+        </div>
+      </div>
+      
+      <div class="legend-section" id="breakout-legend" style="display: none;">
+        <h3 class="legend-title">🚀 Break-out Indicators</h3>
+        <div class="legend-items">
+          <div class="legend-item">
+            <div class="legend-color breakout-hot-demo"></div>
+            <span class="legend-text">🔥 Hot - High viral potential</span>
+          </div>
+          <div class="legend-item">
+            <div class="legend-color breakout-warm-demo"></div>
+            <span class="legend-text">⚡ Warm - Growing quickly</span>
+          </div>
+          <div class="legend-item">
+            <div class="legend-color breakout-watch-demo"></div>
+            <span class="legend-text">👀 Watch - Early momentum</span>
+          </div>
+        </div>
+        
+        <div class="guard-rails-section">
+          <h4 class="guard-rails-title">Guard Rails</h4>
+          <div class="slider-group">
+            <label class="slider-label">
+              <span class="slider-text">Max Views: <span id="max-views-value">100K</span></span>
+              <input type="range" id="max-views-slider" min="10000" max="500000" step="10000" value="100000" class="slider">
+            </label>
+          </div>
+          <div class="slider-group">
+            <label class="slider-label">
+              <span class="slider-text">Max Age: <span id="max-age-value">2h</span></span>
+              <input type="range" id="max-age-slider" min="30" max="360" step="30" value="120" class="slider">
+            </label>
           </div>
         </div>
       </div>
