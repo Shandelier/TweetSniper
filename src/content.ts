@@ -202,6 +202,31 @@ function cleanupOldStats(): void {
 }
 
 /**
+ * Check if a tweet is a sponsored ad
+ */
+function isSponsoredAd(articleEl: HTMLElement): boolean {
+  // Look for span elements containing "Ad" text
+  const spans = articleEl.querySelectorAll('span');
+  for (const span of spans) {
+    const text = span.textContent?.trim();
+    if (text === 'Ad' || text === 'Sponsored' || text === 'Promoted') {
+      return true;
+    }
+  }
+  
+  // Additional check for "From [domain]" links which often indicate ads
+  const links = articleEl.querySelectorAll('a[href]');
+  for (const link of links) {
+    const text = link.textContent?.trim();
+    if (text && text.startsWith('From ') && text.includes('.com')) {
+      return true;
+    }
+  }
+  
+  return false;
+}
+
+/**
  * Check if a tweet has breakout indicators
  */
 function hasBreakoutIndicator(articleEl: HTMLElement): boolean {
@@ -222,8 +247,8 @@ function applyBreakoutFilter(): void {
     const targetEl = getTargetContainer(tweetEl);
     
     if (settings.showOnlyBreakout) {
-      // Hide tweets that don't have breakout indicators
-      if (!hasBreakoutIndicator(tweetEl)) {
+      // Hide tweets that don't have breakout indicators OR are sponsored ads
+      if (!hasBreakoutIndicator(tweetEl) || isSponsoredAd(tweetEl)) {
         targetEl.style.display = 'none';
       } else {
         targetEl.style.display = '';
@@ -341,7 +366,7 @@ function applyHeat(articleEl: HTMLElement): void {
     // Apply breakout filter if enabled
     if (settings.showOnlyBreakout) {
       const targetEl = getTargetContainer(articleEl);
-      if (!hasBreakoutIndicator(articleEl)) {
+      if (!hasBreakoutIndicator(articleEl) || isSponsoredAd(articleEl)) {
         targetEl.style.display = 'none';
       } else {
         targetEl.style.display = '';
