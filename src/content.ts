@@ -126,6 +126,21 @@ function getTweetId(articleEl: HTMLElement): string | null {
 }
 
 /**
+ * Detect if the tweet is an advertisement/promoted post.
+ * Twitter consistently renders a small span containing the exact text "Ad" (or sometimes "Promoted").
+ */
+function isAdTweet(articleEl: HTMLElement): boolean {
+  const spans = articleEl.querySelectorAll('span');
+  for (const span of Array.from(spans)) {
+    const text = span.textContent?.trim().toLowerCase();
+    if (text === 'ad' || text === 'promoted') {
+      return true;
+    }
+  }
+  return false;
+}
+
+/**
  * Extract engagement metrics from tweet
  */
 function extractMetrics(articleEl: HTMLElement): TweetMetrics | null {
@@ -290,7 +305,8 @@ function applyHeat(articleEl: HTMLElement): void {
       const hasBreakout = targetEl.classList.contains('breakout-hot') ||
                          targetEl.classList.contains('breakout-warm') ||
                          targetEl.classList.contains('breakout-watch');
-      targetEl.style.display = hasBreakout ? '' : 'none';
+      const isAd = isAdTweet(articleEl);
+      targetEl.style.display = (hasBreakout && !isAd) ? '' : 'none';
     } else {
       // Always reset the display style when the filter is off so hidden tweets reappear
       targetEl.style.display = '';
