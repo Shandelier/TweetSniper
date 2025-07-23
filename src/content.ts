@@ -8,6 +8,7 @@ interface Settings {
   indicatorMode: 'views' | 'breakout';
   breakoutMaxViews?: number;
   breakoutMaxAge?: number;
+  showOnlyBreakout?: boolean;
 }
 
 interface TweetMetrics {
@@ -55,7 +56,8 @@ let settings: Settings = {
   enabled: true, 
   indicatorMode: 'views',
   breakoutMaxViews: 100000,
-  breakoutMaxAge: 120
+  breakoutMaxAge: 120,
+  showOnlyBreakout: false
 };
 let keywords: Keyword[] = [];
 let observer: MutationObserver | null = null;
@@ -200,6 +202,40 @@ function cleanupOldStats(): void {
 }
 
 /**
+ * Check if a tweet has breakout indicators
+ */
+function hasBreakoutIndicator(articleEl: HTMLElement): boolean {
+  const targetEl = getTargetContainer(articleEl);
+  return targetEl.classList.contains('breakout-hot') || 
+         targetEl.classList.contains('breakout-warm') || 
+         targetEl.classList.contains('breakout-watch');
+}
+
+/**
+ * Apply or remove breakout filter to tweets
+ */
+function applyBreakoutFilter(): void {
+  const tweets = document.querySelectorAll('article[data-testid="tweet"]');
+  
+  tweets.forEach(tweet => {
+    const tweetEl = tweet as HTMLElement;
+    const targetEl = getTargetContainer(tweetEl);
+    
+    if (settings.showOnlyBreakout) {
+      // Hide tweets that don't have breakout indicators
+      if (!hasBreakoutIndicator(tweetEl)) {
+        targetEl.style.display = 'none';
+      } else {
+        targetEl.style.display = '';
+      }
+    } else {
+      // Show all tweets (remove filter)
+      targetEl.style.display = '';
+    }
+  });
+}
+
+/**
  * Apply heat map styling and keyword highlighting to a tweet article element
  */
 function applyHeat(articleEl: HTMLElement): void {
@@ -302,6 +338,16 @@ function applyHeat(articleEl: HTMLElement): void {
       }
     }
     
+    // Apply breakout filter if enabled
+    if (settings.showOnlyBreakout) {
+      const targetEl = getTargetContainer(articleEl);
+      if (!hasBreakoutIndicator(articleEl)) {
+        targetEl.style.display = 'none';
+      } else {
+        targetEl.style.display = '';
+      }
+    }
+    
     // Periodically clean up old stats
     if (Math.random() < 0.01) { // 1% chance on each call
       cleanupOldStats();
@@ -336,6 +382,9 @@ function removeHeat(articleEl: HTMLElement): void {
   if (tweetTextElement) {
     removeKeywordHighlights(tweetTextElement as HTMLElement);
   }
+  
+  // Reset display style (remove any filter hiding)
+  targetEl.style.display = '';
 }
 
 /**
@@ -350,6 +399,11 @@ function scanExisting(): void {
       removeHeat(tweet as HTMLElement);
     }
   });
+  
+  // Apply breakout filter after processing all tweets
+  if (settings.enabled) {
+    applyBreakoutFilter();
+  }
 }
 
 /**
@@ -555,6 +609,14 @@ function setupMessageListener(): void {
       
       // Force repaint of all tweets
       scanExisting();
+      
+      sendResponse({ success: true });
+    } else if (message.type === 'FILTER_CHANGED') {
+      // Update filter setting immediately
+      settings.showOnlyBreakout = message.showOnlyBreakout;
+      
+      // Apply filter to current tweets
+      applyBreakoutFilter();
       
       sendResponse({ success: true });
     }

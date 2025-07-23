@@ -195,6 +195,20 @@ body {
   font-weight: 500;
 }
 
+/* Filter section */
+.filter-section {
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid #e1e8ed;
+}
+
+.filter-description {
+  font-size: 11px;
+  color: #999;
+  margin-top: 4px;
+  margin-left: 0;
+}
+
 /* Legend section */
 .legend-section {
   border-bottom: 1px solid #e1e8ed;
