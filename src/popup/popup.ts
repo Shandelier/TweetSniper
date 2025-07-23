@@ -8,6 +8,7 @@ interface Settings {
   indicatorMode?: 'views' | 'breakout';
   breakoutMaxViews?: number;
   breakoutMaxAge?: number;
+  showBreakoutOnly?: boolean;
 }
 
 const SETTINGS_KEY = 'thm-settings';
@@ -61,7 +62,8 @@ async function loadSettings(): Promise<Settings> {
       enabled: true, 
       indicatorMode: 'views',
       breakoutMaxViews: 100000,
-      breakoutMaxAge: 120
+      breakoutMaxAge: 120,
+      showBreakoutOnly: false
     };
   } catch (error) {
     console.error('Error loading settings:', error);
@@ -69,7 +71,8 @@ async function loadSettings(): Promise<Settings> {
       enabled: true, 
       indicatorMode: 'views',
       breakoutMaxViews: 100000,
-      breakoutMaxAge: 120
+      breakoutMaxAge: 120,
+      showBreakoutOnly: false
     };
   }
 }
@@ -138,6 +141,43 @@ function updateModeUI(mode: 'views' | 'breakout'): void {
   if (viewsLegend && breakoutLegend) {
     viewsLegend.style.display = mode === 'views' ? 'block' : 'none';
     breakoutLegend.style.display = mode === 'breakout' ? 'block' : 'none';
+  }
+}
+
+/**
+ * Update the breakout-only filter toggle state
+ */
+function updateBreakoutFilterUI(enabled: boolean): void {
+  const toggle = document.getElementById('filter-breakout-toggle') as HTMLInputElement;
+  if (toggle) {
+    toggle.checked = enabled;
+  }
+}
+
+/**
+ * Handle breakout-only toggle change
+ */
+async function handleBreakoutFilterChange(event: Event): Promise<void> {
+  const toggle = event.target as HTMLInputElement;
+  const currentSettings = await loadSettings();
+  const settings: Settings = {
+    ...currentSettings,
+    showBreakoutOnly: toggle.checked
+  };
+
+  await saveSettings(settings);
+
+  // Notify content script so it can immediately re-evaluate visibility
+  try {
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (tab.id) {
+      await chrome.tabs.sendMessage(tab.id, {
+        type: 'settingsChanged',
+        settings: settings
+      });
+    }
+  } catch (error) {
+    console.debug('Could not notify content script:', error);
   }
 }
 
@@ -432,6 +472,7 @@ async function initPopup(): Promise<void> {
     updateToggleUI(settings.enabled);
     updateModeUI(settings.indicatorMode || 'views');
     updateGuardRailUI(settings);
+    updateBreakoutFilterUI(settings.showBreakoutOnly || false);
     renderKeywords(keywords);
     
     // Set up toggle listener
@@ -445,6 +486,12 @@ async function initPopup(): Promise<void> {
     modeRadios.forEach(radio => {
       radio.addEventListener('change', handleModeChange);
     });
+
+    // Set up breakout-only toggle
+    const breakoutFilterToggle = document.getElementById('filter-breakout-toggle') as HTMLInputElement;
+    if (breakoutFilterToggle) {
+      breakoutFilterToggle.addEventListener('change', handleBreakoutFilterChange);
+    }
     
     // Set up guard rail sliders
     const maxViewsSlider = document.getElementById('max-views-slider') as HTMLInputElement;

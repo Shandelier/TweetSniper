@@ -8,6 +8,7 @@ interface Settings {
   indicatorMode: 'views' | 'breakout';
   breakoutMaxViews?: number;
   breakoutMaxAge?: number;
+  showBreakoutOnly?: boolean;
 }
 
 interface TweetMetrics {
@@ -55,7 +56,8 @@ let settings: Settings = {
   enabled: true, 
   indicatorMode: 'views',
   breakoutMaxViews: 100000,
-  breakoutMaxAge: 120
+  breakoutMaxAge: 120,
+  showBreakoutOnly: false
 };
 let keywords: Keyword[] = [];
 let observer: MutationObserver | null = null;
@@ -283,6 +285,17 @@ function applyHeat(articleEl: HTMLElement): void {
       }
     }
 
+    // Hide non-breakout tweets when the filter is enabled
+    if (settings.showBreakoutOnly && settings.indicatorMode === 'breakout') {
+      const hasBreakout = targetEl.classList.contains('breakout-hot') ||
+                         targetEl.classList.contains('breakout-warm') ||
+                         targetEl.classList.contains('breakout-watch');
+      targetEl.style.display = hasBreakout ? '' : 'none';
+    } else {
+      // Always reset the display style when the filter is off so hidden tweets reappear
+      targetEl.style.display = '';
+    }
+
     // Handle fire emoji for fresh tweets
     const timeElement = articleEl.querySelector('time') as HTMLTimeElement;
     if (timeElement) {
@@ -336,6 +349,9 @@ function removeHeat(articleEl: HTMLElement): void {
   if (tweetTextElement) {
     removeKeywordHighlights(tweetTextElement as HTMLElement);
   }
+
+  // Ensure the tweet is visible again when cleaning up
+  targetEl.style.display = '';
 }
 
 /**
