@@ -207,7 +207,8 @@ function cleanupOldStats(): void {
 function isSponsoredAd(articleEl: HTMLElement): boolean {
   // Look for span elements containing "Ad" text
   const spans = articleEl.querySelectorAll('span');
-  for (const span of spans) {
+  for (let i = 0; i < spans.length; i++) {
+    const span = spans[i];
     const text = span.textContent?.trim();
     if (text === 'Ad' || text === 'Sponsored' || text === 'Promoted') {
       return true;
@@ -216,7 +217,8 @@ function isSponsoredAd(articleEl: HTMLElement): boolean {
   
   // Additional check for "From [domain]" links which often indicate ads
   const links = articleEl.querySelectorAll('a[href]');
-  for (const link of links) {
+  for (let i = 0; i < links.length; i++) {
+    const link = links[i];
     const text = link.textContent?.trim();
     if (text && text.startsWith('From ') && text.includes('.com')) {
       return true;
@@ -227,13 +229,23 @@ function isSponsoredAd(articleEl: HTMLElement): boolean {
 }
 
 /**
- * Check if a tweet has breakout indicators
+ * Check if a tweet has any indicator (breakout or views based on current mode)
  */
-function hasBreakoutIndicator(articleEl: HTMLElement): boolean {
+function hasAnyIndicator(articleEl: HTMLElement): boolean {
   const targetEl = getTargetContainer(articleEl);
-  return targetEl.classList.contains('breakout-hot') || 
-         targetEl.classList.contains('breakout-warm') || 
-         targetEl.classList.contains('breakout-watch');
+  
+  if (settings.indicatorMode === 'breakout') {
+    // In breakout mode, check for breakout classes
+    return targetEl.classList.contains('breakout-hot') || 
+           targetEl.classList.contains('breakout-warm') || 
+           targetEl.classList.contains('breakout-watch');
+  } else {
+    // In views mode, check for view classes (excluding views-0 which is the default)
+    return targetEl.classList.contains('views-1') ||
+           targetEl.classList.contains('views-2') ||
+           targetEl.classList.contains('views-3') ||
+           targetEl.classList.contains('views-4');
+  }
 }
 
 /**
@@ -247,8 +259,8 @@ function applyBreakoutFilter(): void {
     const targetEl = getTargetContainer(tweetEl);
     
     if (settings.showOnlyBreakout) {
-      // Hide tweets that don't have breakout indicators OR are sponsored ads
-      if (!hasBreakoutIndicator(tweetEl) || isSponsoredAd(tweetEl)) {
+      // Hide tweets that don't have any indicators OR are sponsored ads
+      if (!hasAnyIndicator(tweetEl) || isSponsoredAd(tweetEl)) {
         targetEl.style.display = 'none';
       } else {
         targetEl.style.display = '';
@@ -363,16 +375,6 @@ function applyHeat(articleEl: HTMLElement): void {
       }
     }
     
-    // Apply breakout filter if enabled
-    if (settings.showOnlyBreakout) {
-      const targetEl = getTargetContainer(articleEl);
-      if (!hasBreakoutIndicator(articleEl) || isSponsoredAd(articleEl)) {
-        targetEl.style.display = 'none';
-      } else {
-        targetEl.style.display = '';
-      }
-    }
-    
     // Periodically clean up old stats
     if (Math.random() < 0.01) { // 1% chance on each call
       cleanupOldStats();
@@ -425,9 +427,15 @@ function scanExisting(): void {
     }
   });
   
-  // Apply breakout filter after processing all tweets
-  if (settings.enabled) {
+  // Apply breakout filter after processing all tweets (only when enabled)
+  if (settings.enabled && settings.showOnlyBreakout) {
     applyBreakoutFilter();
+  } else if (!settings.enabled || !settings.showOnlyBreakout) {
+    // Ensure all tweets are visible when filter is disabled
+    tweets.forEach(tweet => {
+      const targetEl = getTargetContainer(tweet as HTMLElement);
+      targetEl.style.display = '';
+    });
   }
 }
 
@@ -461,6 +469,8 @@ function observeNew(): void {
 
   observer = new MutationObserver(mutations => {
     const processChanges = () => {
+      let hasNewTweets = false;
+      
       mutations.forEach(mutation => {
         // Case 1: New nodes were added to the DOM
         mutation.addedNodes.forEach(node => {
@@ -468,11 +478,13 @@ function observeNew(): void {
           const element = node as Element;
           if (element.matches('article[data-testid="tweet"]')) {
             applyHeat(element as HTMLElement);
+            hasNewTweets = true;
           }
           element
             .querySelectorAll('article[data-testid="tweet"]')
             .forEach(tweet => {
               applyHeat(tweet as HTMLElement);
+              hasNewTweets = true;
             });
         });
 
@@ -487,6 +499,11 @@ function observeNew(): void {
           }
         }
       });
+      
+      // Apply filter after processing new tweets if needed
+      if (hasNewTweets && settings.enabled && settings.showOnlyBreakout) {
+        applyBreakoutFilter();
+      }
     };
 
     if ('requestIdleCallback' in window) {
