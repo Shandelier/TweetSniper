@@ -8,6 +8,7 @@ interface Settings {
   indicatorMode?: 'views' | 'breakout';
   breakoutMaxViews?: number;
   breakoutMaxAge?: number;
+  showOnlyBreakout?: boolean;
 }
 
 const SETTINGS_KEY = 'thm-settings';
@@ -61,7 +62,8 @@ async function loadSettings(): Promise<Settings> {
       enabled: true, 
       indicatorMode: 'views',
       breakoutMaxViews: 100000,
-      breakoutMaxAge: 120
+      breakoutMaxAge: 120,
+      showOnlyBreakout: false
     };
   } catch (error) {
     console.error('Error loading settings:', error);
@@ -69,7 +71,8 @@ async function loadSettings(): Promise<Settings> {
       enabled: true, 
       indicatorMode: 'views',
       breakoutMaxViews: 100000,
-      breakoutMaxAge: 120
+      breakoutMaxAge: 120,
+      showOnlyBreakout: false
     };
   }
 }
@@ -182,6 +185,16 @@ function updateGuardRailUI(settings: Settings): void {
   if (maxAgeSlider && maxAgeValue) {
     maxAgeSlider.value = (settings.breakoutMaxAge || 120).toString();
     maxAgeValue.textContent = formatMinutes(settings.breakoutMaxAge || 120);
+  }
+}
+
+/**
+ * Update the breakout filter UI state
+ */
+function updateBreakoutFilterUI(enabled: boolean): void {
+  const filterToggle = document.getElementById('breakout-filter-toggle') as HTMLInputElement;
+  if (filterToggle) {
+    filterToggle.checked = enabled;
   }
 }
 
@@ -380,6 +393,33 @@ function setupKeywordListeners(): void {
 }
 
 /**
+ * Handle breakout filter toggle change
+ */
+async function handleBreakoutFilterChange(event: Event): Promise<void> {
+  const toggle = event.target as HTMLInputElement;
+  const currentSettings = await loadSettings();
+  const settings: Settings = {
+    ...currentSettings,
+    showOnlyBreakout: toggle.checked
+  };
+  
+  await saveSettings(settings);
+  
+  // Notify content script to apply/remove filter
+  try {
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (tab.id) {
+      await chrome.tabs.sendMessage(tab.id, {
+        type: 'FILTER_CHANGED',
+        showOnlyBreakout: settings.showOnlyBreakout
+      });
+    }
+  } catch (error) {
+    console.debug('Could not notify content script:', error);
+  }
+}
+
+/**
  * Handle guard rail changes
  */
 async function handleGuardRailChange(): Promise<void> {
@@ -432,6 +472,7 @@ async function initPopup(): Promise<void> {
     updateToggleUI(settings.enabled);
     updateModeUI(settings.indicatorMode || 'views');
     updateGuardRailUI(settings);
+    updateBreakoutFilterUI(settings.showOnlyBreakout || false);
     renderKeywords(keywords);
     
     // Set up toggle listener
@@ -445,6 +486,12 @@ async function initPopup(): Promise<void> {
     modeRadios.forEach(radio => {
       radio.addEventListener('change', handleModeChange);
     });
+    
+    // Set up breakout filter listener
+    const filterToggle = document.getElementById('breakout-filter-toggle') as HTMLInputElement;
+    if (filterToggle) {
+      filterToggle.addEventListener('change', handleBreakoutFilterChange);
+    }
     
     // Set up guard rail sliders
     const maxViewsSlider = document.getElementById('max-views-slider') as HTMLInputElement;
