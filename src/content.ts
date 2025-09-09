@@ -63,6 +63,32 @@ let keywords: Keyword[] = [];
 let observer: MutationObserver | null = null;
 let styleElement: HTMLStyleElement | null = null;
 
+// Follower cache state
+type FollowerCacheEntry = { count: number; updated: number };
+const FOLLOWER_CACHE_KEY = 'ts-follower-cache';
+let followerCache: Record<string, FollowerCacheEntry> = {};
+let lastProfileCacheUpdate: { handle: string; ts: number } | null = null;
+
+// Follower badge thresholds and styling
+const FOLLOWER_THRESHOLDS = [
+  { max: 1000, className: 'follower-0' },
+  { max: 5000, className: 'follower-1' },
+  { max: 50000, className: 'follower-2' },
+  { max: 500000, className: 'follower-3' },
+  { max: 1000000, className: 'follower-4' },
+  { max: Infinity, className: 'follower-5' },
+];
+
+const FOLLOWER_BADGE_CSS = `
+  .ts-follower-badge { font-size: 10px; line-height: 1; margin-top: 2px; }
+  .follower-0 { color: #657786; }
+  .follower-1 { color: #1DA1F2; }
+  .follower-2 { color: #17BF63; }
+  .follower-3 { color: #F39C12; }
+  .follower-4 { color: #E0245E; }
+  .follower-5 { color: #8E44AD; }
+`;
+
 /**
  * Get the appropriate CSS class for a view count
  */
@@ -102,6 +128,177 @@ function updateFireEmoji(timeElement: HTMLTimeElement, shouldAdd: boolean): void
   } else if (!shouldAdd && hasEmoji) {
     timeElement.textContent = textContent.replace('🔥 ', '');
   }
+}
+
+// ---- Follower badge helpers ----
+
+function formatFollowerCount(count: number): string {
+  if (count >= 1_000_000) return (count / 1_000_000).toFixed(1).replace(/\.0$/, '') + 'M';
+  if (count >= 1_000) return (count / 1_000).toFixed(1).replace(/\.0$/, '') + 'K';
+  return count.toString();
+}
+
+function getFollowerClass(count: number): string {
+  for (const threshold of FOLLOWER_THRESHOLDS) {
+    if (count <= threshold.max) return threshold.className;
+  }
+  return FOLLOWER_THRESHOLDS[FOLLOWER_THRESHOLDS.length - 1].className;
+}
+
+function addFollowerBadge(avatar: HTMLElement, count: number): void {
+  avatar.style.display = 'flex';
+  avatar.style.flexDirection = 'column';
+  avatar.style.alignItems = 'center';
+
+  let badge = avatar.querySelector('.ts-follower-badge') as HTMLSpanElement | null;
+  if (!badge) {
+    badge = document.createElement('span');
+    badge.className = 'ts-follower-badge';
+    avatar.appendChild(badge);
+  }
+
+  badge.textContent = formatFollowerCount(count);
+  badge.className = `ts-follower-badge ${getFollowerClass(count)}`;
+}
+
+// ---- Follower cache helpers ----
+async function loadFollowerCache(): Promise<void> {
+  try {
+    const result = await chrome.storage.local.get([FOLLOWER_CACHE_KEY]);
+    followerCache = result[FOLLOWER_CACHE_KEY] || {};
+  } catch {
+    followerCache = {};
+  }
+}
+
+async function saveFollowerCount(handle: string, count: number): Promise<void> {
+  if (!handle || !Number.isFinite(count)) return;
+  const key = handle.toLowerCase();
+  followerCache[key] = { count, updated: Date.now() };
+  try {
+    await chrome.storage.local.set({ [FOLLOWER_CACHE_KEY]: followerCache });
+  } catch {
+    // Ignore storage errors
+  }
+}
+
+function getCachedFollowerCount(handle: string): number | null {
+  if (!handle) return null;
+  const key = handle.toLowerCase();
+  const entry = followerCache[key];
+  return entry ? entry.count : null;
+}
+
+function getUsernameFromArticle(articleEl: HTMLElement): string | null {
+  // Use /<user>/status/<id> link
+  const link = articleEl.querySelector('a[href*="/status/"]');
+  const href = link?.getAttribute('href') || '';
+  const match = href.match(/\/([^\/]+)\/status\/\d+/);
+  return match ? match[1] : null;
+}
+
+function renderBadgeFromCacheForArticle(articleEl: HTMLElement): void {
+  const handle = getUsernameFromArticle(articleEl);
+  if (!handle) return;
+  const count = getCachedFollowerCount(handle);
+  if (count == null) return;
+  const avatar = articleEl.querySelector('div[data-testid="Tweet-User-Avatar"]') as HTMLElement | null;
+  if (!avatar) return;
+  addFollowerBadge(avatar, count);
+}
+
+function renderBadgesFromCacheInContainer(root: ParentNode = document): void {
+  root.querySelectorAll('article[data-testid="tweet"]').forEach(el => {
+    renderBadgeFromCacheForArticle(el as HTMLElement);
+  });
+}
+
+function extractHandleFromHoverCard(popover: Element): string | null {
+  const text = popover.textContent || '';
+  const atMatch = text.match(/@([A-Za-z0-9_]{1,15})/);
+  return atMatch ? atMatch[1] : null;
+}
+
+// ---- User cell helpers (followers/following/verified_followers tabs) ----
+function isReservedTopPath(segment: string): boolean {
+  const reserved = new Set([
+    'home','explore','notifications','messages','i','settings','compose','search','marketplace','tos','privacy','login','signup','hashtag','topics'
+  ]);
+  return reserved.has(segment.toLowerCase());
+}
+
+function getHandleFromUserCell(cellEl: HTMLElement): string | null {
+  // Try profile links within the cell
+  const anchors = Array.from(cellEl.querySelectorAll('a[href]')) as HTMLAnchorElement[];
+  for (const a of anchors) {
+    const href = a.getAttribute('href') || '';
+    if (href.includes('/status/')) continue;
+    const m = href.match(/^\/([A-Za-z0-9_]{1,15})(?:$|[/?#])/);
+    if (m && !isReservedTopPath(m[1])) return m[1];
+  }
+  // Fallback to text '@handle'
+  const text = cellEl.textContent || '';
+  const tm = text.match(/@([A-Za-z0-9_]{1,15})/);
+  return tm ? tm[1] : null;
+}
+
+function findAvatarContainer(root: Element): HTMLElement | null {
+  const direct = (root.closest('div[data-testid="Tweet-User-Avatar"], div[data-testid="UserAvatar-Container"], div[data-testid="UserAvatar"]') as HTMLElement | null);
+  if (direct) return direct;
+  const nested = root.querySelector('div[data-testid="Tweet-User-Avatar"], div[data-testid="UserAvatar-Container"], div[data-testid="UserAvatar"]') as HTMLElement | null;
+  return nested;
+}
+
+function renderBadgeFromCacheForUserCell(cellEl: HTMLElement): void {
+  const handle = getHandleFromUserCell(cellEl);
+  if (!handle) return;
+  const count = getCachedFollowerCount(handle);
+  if (count == null) return;
+  const avatar = findAvatarContainer(cellEl);
+  if (!avatar) return;
+  addFollowerBadge(avatar, count);
+}
+
+function pollFollowerCount(avatar: HTMLElement, attempt = 0): void {
+  const popover = document.querySelector('[data-testid="HoverCard"]');
+  if (popover) {
+    const text = popover.textContent || '';
+    const match = text.match(/([\d,.]+\s*[KkMmBb]?)\s*Followers/i);
+    if (match) {
+      const count = parseCount(match[1]);
+      if (typeof count === 'number') {
+        // Try to determine the handle to cache the value
+        let handle: string | null = null;
+        const article = avatar.closest('article[data-testid="tweet"]') as HTMLElement | null;
+        if (article) handle = getUsernameFromArticle(article);
+        // Check a user cell context as well
+        if (!handle) {
+          const userCell = avatar.closest('div[data-testid="UserCell"]') as HTMLElement | null;
+          if (userCell) {
+            handle = getHandleFromUserCell(userCell);
+          }
+        }
+        if (!handle) handle = extractHandleFromHoverCard(popover);
+        if (handle) {
+          void saveFollowerCount(handle, count);
+        }
+        addFollowerBadge(avatar, count);
+        return;
+      }
+    }
+  }
+
+  if (attempt < 10) {
+    setTimeout(() => pollFollowerCount(avatar, attempt + 1), 200);
+  }
+}
+
+function onAvatarHover(event: MouseEvent): void {
+  const avatar = (event.target as HTMLElement).closest(
+    'div[data-testid="Tweet-User-Avatar"], div[data-testid="UserAvatar-Container"], div[data-testid="UserAvatar"]'
+  );
+  if (!avatar || (avatar as HTMLElement).querySelector('.ts-follower-badge')) return;
+  setTimeout(() => pollFollowerCount(avatar as HTMLElement), 300);
 }
 
 function getTargetContainer(articleEl: HTMLElement): HTMLElement {
@@ -280,6 +477,8 @@ function applyHeat(articleEl: HTMLElement): void {
 
   try {
     const targetEl = getTargetContainer(articleEl);
+    // Render follower badge from cache for this tweet's author (independent of heatmap)
+    renderBadgeFromCacheForArticle(articleEl);
     
     // Get tweet ID for state tracking
     const tweetId = getTweetId(articleEl);
@@ -437,6 +636,13 @@ function scanExisting(): void {
       targetEl.style.display = '';
     });
   }
+
+  // Render follower badges for any visible tweets using cached values
+  renderBadgesFromCacheInContainer(document);
+  // Render follower badges for user lists (followers/verified followers/etc.)
+  document.querySelectorAll('div[data-testid="UserCell"]').forEach(cell => {
+    renderBadgeFromCacheForUserCell(cell as HTMLElement);
+  });
 }
 
 /**
@@ -480,11 +686,19 @@ function observeNew(): void {
             applyHeat(element as HTMLElement);
             hasNewTweets = true;
           }
+          if (element.matches('div[data-testid="UserCell"]')) {
+            renderBadgeFromCacheForUserCell(element as HTMLElement);
+          }
           element
             .querySelectorAll('article[data-testid="tweet"]')
             .forEach(tweet => {
               applyHeat(tweet as HTMLElement);
               hasNewTweets = true;
+            });
+          element
+            .querySelectorAll('div[data-testid="UserCell"]')
+            .forEach(cell => {
+              renderBadgeFromCacheForUserCell(cell as HTMLElement);
             });
         });
 
@@ -497,6 +711,12 @@ function observeNew(): void {
           if (parentTweet) {
             applyHeat(parentTweet as HTMLElement);
           }
+          const parentCell = (mutation.target as Element).closest(
+            'div[data-testid="UserCell"]'
+          );
+          if (parentCell) {
+            renderBadgeFromCacheForUserCell(parentCell as HTMLElement);
+          }
         }
       });
       
@@ -504,6 +724,9 @@ function observeNew(): void {
       if (hasNewTweets && settings.enabled && settings.showOnlyBreakout) {
         applyBreakoutFilter();
       }
+
+      // Attempt to update follower cache if we're on a profile page
+      maybeUpdateProfileCache();
     };
 
     if ('requestIdleCallback' in window) {
@@ -528,7 +751,7 @@ function injectStyles(): void {
   
   styleElement = document.createElement('style');
   styleElement.id = 'thm-styles';
-  styleElement.textContent = HEAT_MAP_CSS;
+  styleElement.textContent = HEAT_MAP_CSS + FOLLOWER_BADGE_CSS;
   document.head.appendChild(styleElement);
 }
 
@@ -621,6 +844,21 @@ function setupStorageListener(): void {
         }
       }
     }
+
+    // Listen for follower cache updates in local storage
+    if (namespace === 'local') {
+      if (changes[FOLLOWER_CACHE_KEY]) {
+        const newCache = changes[FOLLOWER_CACHE_KEY].newValue as Record<string, FollowerCacheEntry> | undefined;
+        if (newCache) {
+          followerCache = newCache;
+          // Re-render badges using updated cache
+          renderBadgesFromCacheInContainer(document);
+          document.querySelectorAll('div[data-testid="UserCell"]').forEach(cell => {
+            renderBadgeFromCacheForUserCell(cell as HTMLElement);
+          });
+        }
+      }
+    }
   });
 }
 
@@ -667,6 +905,65 @@ function setupMessageListener(): void {
   });
 }
 
+function setupFollowerHover(): void {
+  document.addEventListener('mouseenter', onAvatarHover, true);
+}
+
+// ---- Profile page detection and cache update ----
+function getProfileHandleFromURL(): string | null {
+  const path = location.pathname.split('?')[0];
+  const parts = path.split('/').filter(Boolean);
+  if (parts.length === 0) return null;
+  const candidate = parts[0];
+  const reserved = new Set([
+    'home','explore','notifications','messages','i','settings','compose','search','marketplace','tos','privacy','login','signup','hashtag','topics'
+  ]);
+  if (reserved.has(candidate.toLowerCase())) return null;
+  if (!/^[A-Za-z0-9_]{1,15}$/.test(candidate)) return null;
+  return candidate;
+}
+
+function parseProfileFollowerCount(handle: string): number | null {
+  // Try the /<handle>/followers link first
+  const followersLink = document.querySelector(`a[href$="/${handle}/followers"]`);
+  if (followersLink) {
+    const aria = followersLink.getAttribute('aria-label') || '';
+    const ariaMatch = aria.match(/([\d,.]+\s*[KkMmBb]?)\s*Followers/i);
+    if (ariaMatch) return parseCount(ariaMatch[1]);
+    const text = followersLink.textContent || '';
+    const textMatch = text.match(/([\d,.]+\s*[KkMmBb]?)\s*Followers/i);
+    if (textMatch) return parseCount(textMatch[1]);
+  }
+  // Fallback: any element text with Followers
+  const all = Array.from(document.querySelectorAll('a, span, div'));
+  for (const el of all) {
+    const t = (el.textContent || '').trim();
+    if (/Followers/i.test(t)) {
+      const m = t.match(/([\d,.]+\s*[KkMmBb]?)\s*Followers/i);
+      if (m) {
+        const val = parseCount(m[1]);
+        if (val != null) return val;
+      }
+    }
+  }
+  return null;
+}
+
+function maybeUpdateProfileCache(): void {
+  const handle = getProfileHandleFromURL();
+  if (!handle) return;
+  const now = Date.now();
+  if (lastProfileCacheUpdate && lastProfileCacheUpdate.handle === handle && now - lastProfileCacheUpdate.ts < 15000) {
+    return; // avoid excessive parsing within 15s
+  }
+  const count = parseProfileFollowerCount(handle);
+  if (typeof count === 'number') {
+    lastProfileCacheUpdate = { handle, ts: now };
+    void saveFollowerCount(handle, count);
+    renderBadgesFromCacheInContainer(document);
+  }
+}
+
 /**
  * Clean up when page unloads
  */
@@ -683,11 +980,13 @@ function setupCleanup(): void {
  * Initialize the extension by waiting for the main timeline to be ready.
  */
 async function init(): Promise<void> {
+  await loadFollowerCache();
   await loadSettings();
   await loadKeywords();
   setupStorageListener();
   setupMessageListener();
   setupCleanup();
+  setupFollowerHover();
 
   const runLogic = () => {
     updateExtensionState();

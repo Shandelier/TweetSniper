@@ -1,6 +1,6 @@
 {
   "name": "tweet-heat-map",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Color-codes tweets by view-count and flags fresh ones with 🔥",
   "main": "index.js",
   "scripts": {
