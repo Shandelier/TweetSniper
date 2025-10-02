@@ -52,8 +52,19 @@ const HEAT_MAP_CSS = `
   .breakout-hot, .breakout-warm, .breakout-watch { position: relative; }
 `;
 
-let settings: Settings = { 
-  enabled: true, 
+const STATUS_PILL_CSS = `
+  div[role="status"].ts-new-posts-pill {
+    justify-content: flex-end !important;
+    padding-right: 16px;
+  }
+
+  div[role="status"].ts-new-posts-pill > button.ts-new-posts-pill-button {
+    margin-left: auto;
+  }
+`;
+
+let settings: Settings = {
+  enabled: true,
   indicatorMode: 'views',
   breakoutMaxViews: 100000,
   breakoutMaxAge: 120,
@@ -62,6 +73,24 @@ let settings: Settings = {
 let keywords: Keyword[] = [];
 let observer: MutationObserver | null = null;
 let styleElement: HTMLStyleElement | null = null;
+
+function markStatusPills(root: ParentNode = document): void {
+  const statusElements = root.querySelectorAll<HTMLElement>('div[role="status"]');
+  statusElements.forEach(statusEl => {
+    const pillLabel = statusEl.querySelector('[data-testid="pillLabel"]');
+    const button = statusEl.querySelector('button');
+
+    if (pillLabel && button) {
+      statusEl.classList.add('ts-new-posts-pill');
+      button.classList.add('ts-new-posts-pill-button');
+    } else {
+      statusEl.classList.remove('ts-new-posts-pill');
+      if (button) {
+        button.classList.remove('ts-new-posts-pill-button');
+      }
+    }
+  });
+}
 
 // Follower cache state
 type FollowerCacheEntry = { count: number; updated: number };
@@ -643,6 +672,8 @@ function scanExisting(): void {
   document.querySelectorAll('div[data-testid="UserCell"]').forEach(cell => {
     renderBadgeFromCacheForUserCell(cell as HTMLElement);
   });
+
+  markStatusPills(document);
 }
 
 /**
@@ -700,6 +731,8 @@ function observeNew(): void {
             .forEach(cell => {
               renderBadgeFromCacheForUserCell(cell as HTMLElement);
             });
+
+          markStatusPills(element);
         });
 
         // Case 2: An attribute changed on a tweet or its child,
@@ -724,6 +757,8 @@ function observeNew(): void {
       if (hasNewTweets && settings.enabled && settings.showOnlyBreakout) {
         applyBreakoutFilter();
       }
+
+      markStatusPills(document);
 
       // Attempt to update follower cache if we're on a profile page
       maybeUpdateProfileCache();
@@ -751,7 +786,7 @@ function injectStyles(): void {
   
   styleElement = document.createElement('style');
   styleElement.id = 'thm-styles';
-  styleElement.textContent = HEAT_MAP_CSS + FOLLOWER_BADGE_CSS;
+  styleElement.textContent = HEAT_MAP_CSS + FOLLOWER_BADGE_CSS + STATUS_PILL_CSS;
   document.head.appendChild(styleElement);
 }
 
