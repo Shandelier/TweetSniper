@@ -104,6 +104,11 @@ function cleanupStatusPill(statusEl: HTMLElement, button?: HTMLButtonElement | n
   delete statusEl.dataset.tsNewPostsPosition;
   statusEl.style.pointerEvents = '';
   statusEl.style.display = '';
+  statusEl.style.removeProperty('top');
+  statusEl.style.removeProperty('bottom');
+  statusEl.style.removeProperty('left');
+  statusEl.style.removeProperty('right');
+  statusEl.style.removeProperty('transform');
 
   const targetButton =
     button ??
@@ -156,6 +161,16 @@ function markStatusPills(root: ParentNode = document): void {
       statusEl.dataset.tsNewPosts = 'true';
       statusEl.dataset.tsNewPostsPosition = desiredPosition;
       statusEl.style.pointerEvents = 'none';
+      statusEl.style.setProperty('left', '50%', 'important');
+      statusEl.style.setProperty('right', 'auto', 'important');
+      statusEl.style.setProperty('transform', 'translateX(-50%)', 'important');
+      if (desiredPosition === 'top') {
+        statusEl.style.setProperty('top', '32px', 'important');
+        statusEl.style.removeProperty('bottom');
+      } else {
+        statusEl.style.setProperty('bottom', '32px', 'important');
+        statusEl.style.removeProperty('top');
+      }
       button.style.pointerEvents = 'auto';
       button.style.transform = '';
     } else {
@@ -396,7 +411,10 @@ function pollFollowerCount(avatar: HTMLElement, attempt = 0): void {
 }
 
 function onAvatarHover(event: MouseEvent): void {
-  const avatar = (event.target as HTMLElement).closest(
+  const target = event.target;
+  if (!(target instanceof Element)) return;
+
+  const avatar = target.closest(
     'div[data-testid="Tweet-User-Avatar"], div[data-testid="UserAvatar-Container"], div[data-testid="UserAvatar"]'
   );
   if (!avatar || (avatar as HTMLElement).querySelector('.ts-follower-badge')) return;
