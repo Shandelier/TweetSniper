@@ -209,6 +209,36 @@ body {
   margin-left: 0;
 }
 
+.pill-position-section {
+  margin-top: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.pill-position-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: #333;
+}
+
+.pill-position-select {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid #e1e8ed;
+  border-radius: 6px;
+  background: #ffffff;
+  color: #333;
+  font-size: 13px;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.pill-position-select:focus {
+  outline: none;
+  border-color: #1da1f2;
+  box-shadow: 0 0 0 2px rgba(29, 161, 242, 0.1);
+}
+
 /* Legend section */
 .legend-section {
   border-bottom: 1px solid #e1e8ed;
@@ -503,4 +533,4 @@ body {
 .slider::-moz-range-thumb:hover {
   transform: scale(1.1);
   box-shadow: 0 2px 8px rgba(29, 161, 242, 0.3);
-} 
+}

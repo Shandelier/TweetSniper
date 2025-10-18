@@ -25,6 +25,7 @@ export default [
         HTMLElement: 'readonly',
         HTMLTimeElement: 'readonly',
         HTMLInputElement: 'readonly',
+        HTMLSelectElement: 'readonly',
         HTMLStyleElement: 'readonly',
         MutationObserver: 'readonly',
         jest: 'readonly',
@@ -49,4 +50,4 @@ export default [
   {
     ignores: ['dist/', 'node_modules/'],
   },
-]; 
+];

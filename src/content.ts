@@ -9,6 +9,7 @@ interface Settings {
   breakoutMaxViews?: number;
   breakoutMaxAge?: number;
   showOnlyBreakout?: boolean;
+  newPostsPillPosition?: 'top' | 'bottom' | 'hidden';
 }
 
 interface TweetMetrics {
@@ -53,13 +54,31 @@ const HEAT_MAP_CSS = `
 `;
 
 const STATUS_PILL_CSS = `
-  div[role="status"].ts-new-posts-pill {
-    justify-content: flex-end !important;
-    padding-right: 16px;
+  div[role="status"].ts-new-posts-pill[data-ts-new-posts="true"] {
+    display: flex !important;
+    justify-content: center !important;
+    pointer-events: none !important;
+    position: fixed !important;
+    left: 50% !important;
+    top: auto !important;
+    bottom: auto !important;
+    transform: translateX(-50%) !important;
+    width: auto !important;
+    z-index: 2147483647 !important;
   }
 
-  div[role="status"].ts-new-posts-pill > button.ts-new-posts-pill-button {
-    margin-left: auto;
+  div[role="status"].ts-new-posts-pill[data-ts-new-posts="true"][data-ts-new-posts-position="top"] {
+    top: 32px !important;
+    bottom: auto !important;
+  }
+
+  div[role="status"].ts-new-posts-pill[data-ts-new-posts="true"][data-ts-new-posts-position="bottom"] {
+    bottom: 32px !important;
+    top: auto !important;
+  }
+
+  div[role="status"].ts-new-posts-pill[data-ts-new-posts="true"] > button.ts-new-posts-pill-button {
+    pointer-events: auto !important;
   }
 `;
 
@@ -68,26 +87,80 @@ let settings: Settings = {
   indicatorMode: 'views',
   breakoutMaxViews: 100000,
   breakoutMaxAge: 120,
-  showOnlyBreakout: false
+  showOnlyBreakout: false,
+  newPostsPillPosition: 'bottom'
 };
 let keywords: Keyword[] = [];
 let observer: MutationObserver | null = null;
 let styleElement: HTMLStyleElement | null = null;
+function cleanupNewPostButtonStyles(button: HTMLButtonElement): void {
+  button.style.pointerEvents = '';
+  button.style.transform = '';
+}
+
+function cleanupStatusPill(statusEl: HTMLElement, button?: HTMLButtonElement | null): void {
+  statusEl.classList.remove('ts-new-posts-pill');
+  delete statusEl.dataset.tsNewPosts;
+  delete statusEl.dataset.tsNewPostsPosition;
+  statusEl.style.pointerEvents = '';
+  statusEl.style.display = '';
+
+  const targetButton =
+    button ??
+    statusEl.querySelector<HTMLButtonElement>('button.ts-new-posts-pill-button') ??
+    statusEl.querySelector<HTMLButtonElement>('button');
+
+  if (targetButton) {
+    targetButton.classList.remove('ts-new-posts-pill-button');
+    cleanupNewPostButtonStyles(targetButton);
+  }
+}
 
 function markStatusPills(root: ParentNode = document): void {
-  const statusElements = root.querySelectorAll<HTMLElement>('div[role="status"]');
+  const statusElements: HTMLElement[] = [];
+  if (root instanceof Element && root.matches('div[role="status"]')) {
+    statusElements.push(root as HTMLElement);
+  }
+  root.querySelectorAll<HTMLElement>('div[role="status"]').forEach(status => {
+    statusElements.push(status);
+  });
+
   statusElements.forEach(statusEl => {
     const pillLabel = statusEl.querySelector('[data-testid="pillLabel"]');
-    const button = statusEl.querySelector('button');
+    const button = statusEl.querySelector<HTMLButtonElement>('button');
 
-    if (pillLabel && button) {
+    if (!settings.enabled) {
+      cleanupStatusPill(statusEl, button);
+      return;
+    }
+
+    if (!pillLabel || !button) {
+      cleanupStatusPill(statusEl, button);
+      return;
+    }
+
+    const ariaLabel = button.getAttribute('aria-label')?.toLowerCase() ?? '';
+    const isNewPosts = ariaLabel.includes('new posts');
+    const desiredPosition = settings.newPostsPillPosition ?? 'bottom';
+
+    if (isNewPosts) {
+      if (desiredPosition === 'hidden') {
+        cleanupStatusPill(statusEl, button);
+        statusEl.style.display = 'none';
+        return;
+      }
+
+      statusEl.style.display = '';
       statusEl.classList.add('ts-new-posts-pill');
       button.classList.add('ts-new-posts-pill-button');
+      statusEl.dataset.tsNewPosts = 'true';
+      statusEl.dataset.tsNewPostsPosition = desiredPosition;
+      statusEl.style.pointerEvents = 'none';
+      button.style.pointerEvents = 'auto';
+      button.style.transform = '';
     } else {
-      statusEl.classList.remove('ts-new-posts-pill');
-      if (button) {
-        button.classList.remove('ts-new-posts-pill-button');
-      }
+      cleanupStatusPill(statusEl, button);
+      statusEl.style.display = '';
     }
   });
 }

@@ -9,6 +9,7 @@ interface Settings {
   breakoutMaxViews?: number;
   breakoutMaxAge?: number;
   showOnlyBreakout?: boolean;
+  newPostsPillPosition?: 'top' | 'bottom' | 'hidden';
 }
 
 const SETTINGS_KEY = 'thm-settings';
@@ -56,24 +57,25 @@ async function performManualRefresh(): Promise<void> {
  * Load current settings from chrome.storage
  */
 async function loadSettings(): Promise<Settings> {
+  const defaultSettings: Settings = { 
+    enabled: true, 
+    indicatorMode: 'views',
+    breakoutMaxViews: 100000,
+    breakoutMaxAge: 120,
+    showOnlyBreakout: false,
+    newPostsPillPosition: 'bottom'
+  };
+
   try {
     const result = await chrome.storage.sync.get([SETTINGS_KEY]);
-    return result[SETTINGS_KEY] || { 
-      enabled: true, 
-      indicatorMode: 'views',
-      breakoutMaxViews: 100000,
-      breakoutMaxAge: 120,
-      showOnlyBreakout: false
-    };
+    const storedSettings = result[SETTINGS_KEY];
+    if (storedSettings) {
+      return { ...defaultSettings, ...storedSettings };
+    }
+    return defaultSettings;
   } catch (error) {
     console.error('Error loading settings:', error);
-    return { 
-      enabled: true, 
-      indicatorMode: 'views',
-      breakoutMaxViews: 100000,
-      breakoutMaxAge: 120,
-      showOnlyBreakout: false
-    };
+    return defaultSettings;
   }
 }
 
@@ -141,6 +143,16 @@ function updateModeUI(mode: 'views' | 'breakout'): void {
   if (viewsLegend && breakoutLegend) {
     viewsLegend.style.display = mode === 'views' ? 'block' : 'none';
     breakoutLegend.style.display = mode === 'breakout' ? 'block' : 'none';
+  }
+}
+
+/**
+ * Update new posts pill position UI
+ */
+function updatePillPositionUI(position: 'top' | 'bottom' | 'hidden'): void {
+  const select = document.getElementById('pill-position-select') as HTMLSelectElement | null;
+  if (select) {
+    select.value = position;
   }
 }
 
@@ -262,6 +274,34 @@ async function handleModeChange(event: Event): Promise<void> {
     }
   } catch (error) {
     // Content script might not be loaded, that's okay
+    console.debug('Could not notify content script:', error);
+  }
+}
+
+/**
+ * Handle new posts pill position change
+ */
+async function handlePillPositionChange(event: Event): Promise<void> {
+  const select = event.target as HTMLSelectElement;
+  const nextPosition = select.value as 'top' | 'bottom' | 'hidden';
+  const currentSettings = await loadSettings();
+  const settings: Settings = {
+    ...currentSettings,
+    newPostsPillPosition: nextPosition
+  };
+
+  await saveSettings(settings);
+  updatePillPositionUI(nextPosition);
+
+  try {
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (tab.id) {
+      await chrome.tabs.sendMessage(tab.id, {
+        type: 'settingsChanged',
+        settings
+      });
+    }
+  } catch (error) {
     console.debug('Could not notify content script:', error);
   }
 }
@@ -473,6 +513,7 @@ async function initPopup(): Promise<void> {
     updateModeUI(settings.indicatorMode || 'views');
     updateGuardRailUI(settings);
     updateBreakoutFilterUI(settings.showOnlyBreakout || false);
+    updatePillPositionUI((settings.newPostsPillPosition ?? 'bottom') as 'top' | 'bottom' | 'hidden');
     renderKeywords(keywords);
     
     // Set up toggle listener
@@ -502,6 +543,11 @@ async function initPopup(): Promise<void> {
     if (maxAgeSlider) {
       maxAgeSlider.addEventListener('input', handleGuardRailChange);
     }
+
+    const pillPositionSelect = document.getElementById('pill-position-select') as HTMLSelectElement;
+    if (pillPositionSelect) {
+      pillPositionSelect.addEventListener('change', handlePillPositionChange);
+    }
     
     // Set up keyword management
     setupKeywordListeners();
@@ -520,4 +566,4 @@ if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', initPopup);
 } else {
   initPopup();
-} 
+}
