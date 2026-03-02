@@ -14,118 +14,188 @@
     </header>
     
     <main class="popup-main">
-      <div class="toggle-section">
-        <label class="toggle-label" for="enabled-toggle">
-          <span class="toggle-text">Enable</span>
-          <div class="toggle-switch">
-            <input type="checkbox" id="enabled-toggle" class="toggle-input">
-            <span class="toggle-slider"></span>
-          </div>
-        </label>
-        <button id="refresh-btn" class="refresh-btn" title="Refresh effects on current page">
-          <span class="refresh-icon">⟳</span>
-          <span class="refresh-text">Refresh</span>
+      <div class="domain-tabs" role="tablist" aria-label="Domain settings">
+        <button id="tab-x" class="domain-tab is-active" data-tab-target="x" role="tab" aria-selected="true">
+          X.com
         </button>
-        
-        <div class="mode-selector">
-          <h3 class="mode-title">Indicator Mode</h3>
-          <div class="mode-options">
-            <label class="mode-option">
-              <input type="radio" name="indicator-mode" value="views" id="mode-views" checked>
-              <span class="mode-text">View Count</span>
-            </label>
-            <label class="mode-option">
-              <input type="radio" name="indicator-mode" value="breakout" id="mode-breakout">
-              <span class="mode-text">Break-out Detection</span>
-            </label>
-          </div>
-        </div>
-        
-        <div class="filter-section">
-          <label class="toggle-label" for="breakout-filter-toggle">
-            <span class="toggle-text">Show Only Growing Fast Posts</span>
+        <button id="tab-trustmrr" class="domain-tab" data-tab-target="trustmrr" role="tab" aria-selected="false">
+          TrustMRR
+        </button>
+      </div>
+
+      <section id="panel-x" class="domain-panel is-active" data-tab-panel="x" role="tabpanel">
+        <div class="toggle-section">
+          <label class="toggle-label" for="enabled-toggle">
+            <span class="toggle-text">Enable</span>
             <div class="toggle-switch">
-              <input type="checkbox" id="breakout-filter-toggle" class="toggle-input">
+              <input type="checkbox" id="enabled-toggle" class="toggle-input">
               <span class="toggle-slider"></span>
             </div>
           </label>
-          <p class="filter-description">Hide posts without break-out indicators (Tier 1-3) and ads</p>
-        </div>
+          <button id="refresh-btn" class="refresh-btn" title="Refresh effects on current page">
+            <span class="refresh-icon">⟳</span>
+            <span class="refresh-text">Refresh</span>
+          </button>
+          
+          <div class="mode-selector">
+            <h3 class="mode-title">Indicator Mode</h3>
+            <div class="mode-options">
+              <label class="mode-option">
+                <input type="radio" name="indicator-mode" value="views" id="mode-views" checked>
+                <span class="mode-text">View Count</span>
+              </label>
+              <label class="mode-option">
+                <input type="radio" name="indicator-mode" value="breakout" id="mode-breakout">
+                <span class="mode-text">Break-out Detection</span>
+              </label>
+            </div>
+          </div>
+          
+          <div class="filter-section">
+            <label class="toggle-label" for="breakout-filter-toggle">
+              <span class="toggle-text">Show Only Growing Fast Posts</span>
+              <div class="toggle-switch">
+                <input type="checkbox" id="breakout-filter-toggle" class="toggle-input">
+                <span class="toggle-slider"></span>
+              </div>
+            </label>
+            <p class="filter-description">Hide posts without break-out indicators (Tier 1-3) and ads</p>
+          </div>
 
-        <div class="pill-position-section">
-          <label class="pill-position-label" for="pill-position-select">New Posts Pill</label>
-          <select id="pill-position-select" class="pill-position-select">
-            <option value="top">Pinned to top</option>
-            <option value="bottom">Docked to bottom</option>
-            <option value="hidden">Hidden</option>
-          </select>
-        </div>
-      </div>
-      
-      <div class="legend-section" id="views-legend">
-        <h3 class="legend-title">View Count Legend</h3>
-        <div class="legend-items">
-          <div class="legend-item">
-            <div class="legend-color views-1-demo"></div>
-            <span class="legend-text">3K - 15K views</span>
-          </div>
-          <div class="legend-item">
-            <div class="legend-color views-2-demo"></div>
-            <span class="legend-text">15K - 75K views</span>
-          </div>
-          <div class="legend-item">
-            <div class="legend-color views-3-demo"></div>
-            <span class="legend-text">75K - 300K views</span>
-          </div>
-          <div class="legend-item">
-            <div class="legend-color views-4-demo"></div>
-            <span class="legend-text">300K+ views</span>
-          </div>
-        </div>
-      </div>
-      
-      <div class="legend-section" id="breakout-legend" style="display: none;">
-        <h3 class="legend-title">🚀 Break-out Indicators</h3>
-        <div class="legend-items">
-          <div class="legend-item">
-            <div class="legend-color breakout-hot-demo"></div>
-            <span class="legend-text">🔥 Hot - High viral potential</span>
-          </div>
-          <div class="legend-item">
-            <div class="legend-color breakout-warm-demo"></div>
-            <span class="legend-text">⚡ Warm - Growing quickly</span>
-          </div>
-          <div class="legend-item">
-            <div class="legend-color breakout-watch-demo"></div>
-            <span class="legend-text">👀 Watch - Early momentum</span>
+          <div class="pill-position-section">
+            <label class="pill-position-label" for="pill-position-select">New Posts Pill</label>
+            <select id="pill-position-select" class="pill-position-select">
+              <option value="top">Pinned to top</option>
+              <option value="bottom">Docked to bottom</option>
+              <option value="hidden">Hidden</option>
+            </select>
           </div>
         </div>
         
-        <div class="guard-rails-section">
-          <h4 class="guard-rails-title">Guard Rails</h4>
-          <div class="slider-group">
-            <label class="slider-label">
-              <span class="slider-text">Max Views: <span id="max-views-value">100K</span></span>
-              <input type="range" id="max-views-slider" min="10000" max="500000" step="10000" value="100000" class="slider">
-            </label>
+        <div class="legend-section" id="views-legend">
+          <h3 class="legend-title">View Count Legend</h3>
+          <div class="legend-items">
+            <div class="legend-item">
+              <div class="legend-color views-1-demo"></div>
+              <span class="legend-text">3K - 15K views</span>
+            </div>
+            <div class="legend-item">
+              <div class="legend-color views-2-demo"></div>
+              <span class="legend-text">15K - 75K views</span>
+            </div>
+            <div class="legend-item">
+              <div class="legend-color views-3-demo"></div>
+              <span class="legend-text">75K - 300K views</span>
+            </div>
+            <div class="legend-item">
+              <div class="legend-color views-4-demo"></div>
+              <span class="legend-text">300K+ views</span>
+            </div>
           </div>
-          <div class="slider-group">
-            <label class="slider-label">
-              <span class="slider-text">Max Age: <span id="max-age-value">2h</span></span>
-              <input type="range" id="max-age-slider" min="30" max="360" step="30" value="120" class="slider">
+        </div>
+        
+        <div class="legend-section" id="breakout-legend" style="display: none;">
+          <h3 class="legend-title">🚀 Break-out Indicators</h3>
+          <div class="legend-items">
+            <div class="legend-item">
+              <div class="legend-color breakout-hot-demo"></div>
+              <span class="legend-text">🔥 Hot - High viral potential</span>
+            </div>
+            <div class="legend-item">
+              <div class="legend-color breakout-warm-demo"></div>
+              <span class="legend-text">⚡ Warm - Growing quickly</span>
+            </div>
+            <div class="legend-item">
+              <div class="legend-color breakout-watch-demo"></div>
+              <span class="legend-text">👀 Watch - Early momentum</span>
+            </div>
+          </div>
+          
+          <div class="guard-rails-section">
+            <h4 class="guard-rails-title">Guard Rails</h4>
+            <div class="slider-group">
+              <label class="slider-label">
+                <span class="slider-text">Max Views: <span id="max-views-value">100K</span></span>
+                <input type="range" id="max-views-slider" min="10000" max="500000" step="10000" value="100000" class="slider">
+              </label>
+            </div>
+            <div class="slider-group">
+              <label class="slider-label">
+                <span class="slider-text">Max Age: <span id="max-age-value">2h</span></span>
+                <input type="range" id="max-age-slider" min="30" max="360" step="30" value="120" class="slider">
+              </label>
+            </div>
+          </div>
+        </div>
+        
+        <div class="keywords-section">
+          <h3 class="keywords-title">Keyword Highlighting</h3>
+          <div class="keyword-input">
+            <input type="text" id="keyword-input" placeholder="Add keyword..." maxlength="50">
+            <button id="add-keyword" class="btn-add">+</button>
+          </div>
+          <div id="keyword-list" class="keyword-list"></div>
+        </div>
+      </section>
+
+      <section id="panel-trustmrr" class="domain-panel" data-tab-panel="trustmrr" role="tabpanel">
+        <div class="trustmrr-section trustmrr-section--standalone">
+          <h3 class="mode-title">TrustMRR Filters</h3>
+
+          <label class="toggle-label" for="trustmrr-enabled-toggle">
+            <span class="toggle-text">Enable on TrustMRR</span>
+            <div class="toggle-switch">
+              <input type="checkbox" id="trustmrr-enabled-toggle" class="toggle-input">
+              <span class="toggle-slider"></span>
+            </div>
+          </label>
+
+          <label class="toggle-label" for="trustmrr-hide-toggle">
+            <span class="toggle-text">Hide non-matching startups</span>
+            <div class="toggle-switch">
+              <input type="checkbox" id="trustmrr-hide-toggle" class="toggle-input">
+              <span class="toggle-slider"></span>
+            </div>
+          </label>
+
+          <label class="toggle-label" for="trustmrr-color-toggle">
+            <span class="toggle-text">Color code by MRR</span>
+            <div class="toggle-switch">
+              <input type="checkbox" id="trustmrr-color-toggle" class="toggle-input">
+              <span class="toggle-slider"></span>
+            </div>
+          </label>
+
+          <div class="trustmrr-range-grid">
+            <label class="trustmrr-field">
+              <span>Revenue min ($)</span>
+              <input id="trustmrr-revenue-min" type="number" min="0" step="100" placeholder="e.g. 1000">
+            </label>
+            <label class="trustmrr-field">
+              <span>Revenue max ($)</span>
+              <input id="trustmrr-revenue-max" type="number" min="0" step="100" placeholder="optional">
+            </label>
+
+            <label class="trustmrr-field">
+              <span>MRR min ($)</span>
+              <input id="trustmrr-mrr-min" type="number" min="0" step="100" placeholder="e.g. 1000">
+            </label>
+            <label class="trustmrr-field">
+              <span>MRR max ($)</span>
+              <input id="trustmrr-mrr-max" type="number" min="0" step="100" placeholder="optional">
+            </label>
+
+            <label class="trustmrr-field">
+              <span>Total min ($)</span>
+              <input id="trustmrr-total-min" type="number" min="0" step="100" placeholder="optional">
+            </label>
+            <label class="trustmrr-field">
+              <span>Total max ($)</span>
+              <input id="trustmrr-total-max" type="number" min="0" step="100" placeholder="optional">
             </label>
           </div>
         </div>
-      </div>
-      
-      <div class="keywords-section">
-        <h3 class="keywords-title">Keyword Highlighting</h3>
-        <div class="keyword-input">
-          <input type="text" id="keyword-input" placeholder="Add keyword..." maxlength="50">
-          <button id="add-keyword" class="btn-add">+</button>
-        </div>
-        <div id="keyword-list" class="keyword-list"></div>
-      </div>
+      </section>
     </main>
   </div>
   

@@ -4,17 +4,30 @@
   "version": "0.1.0",
   "description": "Color-codes tweets by view-count and flags fresh ones with 🔥.",
   "permissions": ["activeTab", "storage", "scripting"],
-  "host_permissions": ["https://*.twitter.com/*", "https://*.x.com/*"],
+  "host_permissions": [
+    "https://*.twitter.com/*",
+    "https://*.x.com/*",
+    "https://trustmrr.com/*",
+    "https://*.trustmrr.com/*"
+  ],
   "action": {
     "default_popup": "popup/popup.html",
     "default_icon": "icons/icon128.png"
   },
-  "content_scripts": [{
-    "matches": ["https://*.twitter.com/*", "https://*.x.com/*"],
-    "js": ["content.js"],
-    "type": "module",
-    "run_at": "document_idle"
-  }],
+  "content_scripts": [
+    {
+      "matches": ["https://*.twitter.com/*", "https://*.x.com/*"],
+      "js": ["content.js"],
+      "type": "module",
+      "run_at": "document_idle"
+    },
+    {
+      "matches": ["https://trustmrr.com/*", "https://*.trustmrr.com/*"],
+      "js": ["trustmrr.js"],
+      "type": "module",
+      "run_at": "document_idle"
+    }
+  ],
   "icons": {
     "128": "icons/icon128.png"
   }

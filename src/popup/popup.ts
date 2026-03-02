@@ -3,6 +3,18 @@
 
 import { Keyword, getNextKeywordColor } from '../utils.js';
 
+interface TrustMrrSettings {
+  enabled: boolean;
+  hideNonMatching: boolean;
+  colorCoding: boolean;
+  revenueMin: number | null;
+  revenueMax: number | null;
+  mrrMin: number | null;
+  mrrMax: number | null;
+  totalMin: number | null;
+  totalMax: number | null;
+}
+
 interface Settings {
   enabled: boolean;
   indicatorMode?: 'views' | 'breakout';
@@ -10,10 +22,113 @@ interface Settings {
   breakoutMaxAge?: number;
   showOnlyBreakout?: boolean;
   newPostsPillPosition?: 'top' | 'bottom' | 'hidden';
+  trustMrr?: TrustMrrSettings;
 }
+
+type DomainTab = 'x' | 'trustmrr';
 
 const SETTINGS_KEY = 'thm-settings';
 const KEYWORDS_KEY = 'thm-keywords';
+const POPUP_TAB_KEY = 'thm-popup-active-tab';
+const DEFAULT_TRUST_MRR_SETTINGS: TrustMrrSettings = {
+  enabled: true,
+  hideNonMatching: true,
+  colorCoding: true,
+  revenueMin: null,
+  revenueMax: null,
+  mrrMin: null,
+  mrrMax: null,
+  totalMin: null,
+  totalMax: null
+};
+
+function isDomainTab(value: string | null): value is DomainTab {
+  return value === 'x' || value === 'trustmrr';
+}
+
+function setActiveDomainTab(tab: DomainTab): void {
+  const tabButtons = document.querySelectorAll('.domain-tab');
+  tabButtons.forEach(button => {
+    const target = (button as HTMLElement).dataset.tabTarget;
+    const isActive = target === tab;
+    (button as HTMLElement).classList.toggle('is-active', isActive);
+    (button as HTMLElement).setAttribute('aria-selected', isActive ? 'true' : 'false');
+  });
+
+  const panels = document.querySelectorAll<HTMLElement>('.domain-panel');
+  panels.forEach(panel => {
+    const panelTab = panel.dataset.tabPanel;
+    panel.classList.toggle('is-active', panelTab === tab);
+  });
+
+  try {
+    window.localStorage.setItem(POPUP_TAB_KEY, tab);
+  } catch (error) {
+    console.debug('Could not save popup tab state:', error);
+  }
+
+  const popupMain = document.querySelector<HTMLElement>('.popup-main');
+  if (popupMain) {
+    popupMain.scrollTop = 0;
+  }
+}
+
+function setupDomainTabs(initialTab: DomainTab): void {
+  const tabButtons = document.querySelectorAll('.domain-tab');
+  tabButtons.forEach(button => {
+    button.addEventListener('click', () => {
+      const target = (button as HTMLElement).dataset.tabTarget;
+      if (target === 'x' || target === 'trustmrr') {
+        setActiveDomainTab(target);
+      }
+    });
+  });
+
+  setActiveDomainTab(initialTab);
+}
+
+function getSavedDomainTab(): DomainTab | null {
+  try {
+    const saved = window.localStorage.getItem(POPUP_TAB_KEY);
+    return isDomainTab(saved) ? saved : null;
+  } catch (error) {
+    console.debug('Could not load popup tab state:', error);
+    return null;
+  }
+}
+
+function inferDomainTabFromUrl(url: string | undefined): DomainTab | null {
+  if (!url) {
+    return null;
+  }
+  try {
+    const parsed = new window.URL(url);
+    if (parsed.hostname.includes('trustmrr.com')) {
+      return 'trustmrr';
+    }
+    if (parsed.hostname.includes('x.com') || parsed.hostname.includes('twitter.com')) {
+      return 'x';
+    }
+    return null;
+  } catch (error) {
+    console.debug('Could not parse active tab URL:', error);
+    return null;
+  }
+}
+
+async function detectInitialDomainTab(): Promise<DomainTab> {
+  try {
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    const inferred = inferDomainTabFromUrl(tab?.url);
+    if (inferred) {
+      return inferred;
+    }
+  } catch (error) {
+    console.debug('Could not detect active tab domain:', error);
+  }
+
+  return getSavedDomainTab() || 'x';
+}
 
 /**
  * Send a message to the content script to trigger immediate refresh
@@ -63,14 +178,22 @@ async function loadSettings(): Promise<Settings> {
     breakoutMaxViews: 100000,
     breakoutMaxAge: 120,
     showOnlyBreakout: false,
-    newPostsPillPosition: 'bottom'
+    newPostsPillPosition: 'bottom',
+    trustMrr: { ...DEFAULT_TRUST_MRR_SETTINGS }
   };
 
   try {
     const result = await chrome.storage.sync.get([SETTINGS_KEY]);
     const storedSettings = result[SETTINGS_KEY];
     if (storedSettings) {
-      return { ...defaultSettings, ...storedSettings };
+      return {
+        ...defaultSettings,
+        ...storedSettings,
+        trustMrr: {
+          ...DEFAULT_TRUST_MRR_SETTINGS,
+          ...(storedSettings.trustMrr || {})
+        }
+      };
     }
     return defaultSettings;
   } catch (error) {
@@ -208,6 +331,86 @@ function updateBreakoutFilterUI(enabled: boolean): void {
   if (filterToggle) {
     filterToggle.checked = enabled;
   }
+}
+
+function toInputValue(value: number | null): string {
+  return typeof value === 'number' && Number.isFinite(value) ? String(Math.round(value)) : '';
+}
+
+function parseNullableNumber(raw: string): number | null {
+  const trimmed = raw.trim();
+  if (!trimmed) {
+    return null;
+  }
+  const parsed = Number.parseFloat(trimmed);
+  if (!Number.isFinite(parsed) || parsed < 0) {
+    return null;
+  }
+  return parsed;
+}
+
+function updateTrustMrrUI(trustMrr: TrustMrrSettings): void {
+  const enabledToggle = document.getElementById('trustmrr-enabled-toggle') as HTMLInputElement | null;
+  const hideToggle = document.getElementById('trustmrr-hide-toggle') as HTMLInputElement | null;
+  const colorToggle = document.getElementById('trustmrr-color-toggle') as HTMLInputElement | null;
+  const revenueMin = document.getElementById('trustmrr-revenue-min') as HTMLInputElement | null;
+  const revenueMax = document.getElementById('trustmrr-revenue-max') as HTMLInputElement | null;
+  const mrrMin = document.getElementById('trustmrr-mrr-min') as HTMLInputElement | null;
+  const mrrMax = document.getElementById('trustmrr-mrr-max') as HTMLInputElement | null;
+  const totalMin = document.getElementById('trustmrr-total-min') as HTMLInputElement | null;
+  const totalMax = document.getElementById('trustmrr-total-max') as HTMLInputElement | null;
+
+  if (enabledToggle) {
+    enabledToggle.checked = trustMrr.enabled;
+  }
+  if (hideToggle) {
+    hideToggle.checked = trustMrr.hideNonMatching;
+  }
+  if (colorToggle) {
+    colorToggle.checked = trustMrr.colorCoding;
+  }
+  if (revenueMin) {
+    revenueMin.value = toInputValue(trustMrr.revenueMin);
+  }
+  if (revenueMax) {
+    revenueMax.value = toInputValue(trustMrr.revenueMax);
+  }
+  if (mrrMin) {
+    mrrMin.value = toInputValue(trustMrr.mrrMin);
+  }
+  if (mrrMax) {
+    mrrMax.value = toInputValue(trustMrr.mrrMax);
+  }
+  if (totalMin) {
+    totalMin.value = toInputValue(trustMrr.totalMin);
+  }
+  if (totalMax) {
+    totalMax.value = toInputValue(trustMrr.totalMax);
+  }
+}
+
+function collectTrustMrrFromUI(): TrustMrrSettings {
+  const enabledToggle = document.getElementById('trustmrr-enabled-toggle') as HTMLInputElement | null;
+  const hideToggle = document.getElementById('trustmrr-hide-toggle') as HTMLInputElement | null;
+  const colorToggle = document.getElementById('trustmrr-color-toggle') as HTMLInputElement | null;
+  const revenueMin = document.getElementById('trustmrr-revenue-min') as HTMLInputElement | null;
+  const revenueMax = document.getElementById('trustmrr-revenue-max') as HTMLInputElement | null;
+  const mrrMin = document.getElementById('trustmrr-mrr-min') as HTMLInputElement | null;
+  const mrrMax = document.getElementById('trustmrr-mrr-max') as HTMLInputElement | null;
+  const totalMin = document.getElementById('trustmrr-total-min') as HTMLInputElement | null;
+  const totalMax = document.getElementById('trustmrr-total-max') as HTMLInputElement | null;
+
+  return {
+    enabled: enabledToggle ? enabledToggle.checked : DEFAULT_TRUST_MRR_SETTINGS.enabled,
+    hideNonMatching: hideToggle ? hideToggle.checked : DEFAULT_TRUST_MRR_SETTINGS.hideNonMatching,
+    colorCoding: colorToggle ? colorToggle.checked : DEFAULT_TRUST_MRR_SETTINGS.colorCoding,
+    revenueMin: parseNullableNumber(revenueMin?.value || ''),
+    revenueMax: parseNullableNumber(revenueMax?.value || ''),
+    mrrMin: parseNullableNumber(mrrMin?.value || ''),
+    mrrMax: parseNullableNumber(mrrMax?.value || ''),
+    totalMin: parseNullableNumber(totalMin?.value || ''),
+    totalMax: parseNullableNumber(totalMax?.value || '')
+  };
 }
 
 /**
@@ -499,11 +702,60 @@ async function handleGuardRailChange(): Promise<void> {
   }
 }
 
+async function handleTrustMrrSettingsChange(): Promise<void> {
+  const currentSettings = await loadSettings();
+  const settings: Settings = {
+    ...currentSettings,
+    trustMrr: collectTrustMrrFromUI()
+  };
+
+  await saveSettings(settings);
+
+  try {
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (tab.id) {
+      await chrome.tabs.sendMessage(tab.id, {
+        type: 'settingsChanged',
+        settings
+      });
+    }
+  } catch (error) {
+    console.debug('Could not notify content script:', error);
+  }
+}
+
+function setupTrustMrrListeners(): void {
+  const trustMrrIds = [
+    'trustmrr-enabled-toggle',
+    'trustmrr-hide-toggle',
+    'trustmrr-color-toggle',
+    'trustmrr-revenue-min',
+    'trustmrr-revenue-max',
+    'trustmrr-mrr-min',
+    'trustmrr-mrr-max',
+    'trustmrr-total-min',
+    'trustmrr-total-max'
+  ];
+
+  trustMrrIds.forEach(id => {
+    const el = document.getElementById(id) as HTMLInputElement | null;
+    if (!el) return;
+
+    const eventName = el.type === 'number' ? 'change' : 'change';
+    el.addEventListener(eventName, () => {
+      void handleTrustMrrSettingsChange();
+    });
+  });
+}
+
 /**
  * Initialize the popup
  */
 async function initPopup(): Promise<void> {
   try {
+    const initialDomainTab = await detectInitialDomainTab();
+    setupDomainTabs(initialDomainTab);
+
     // Load current settings and keywords
     const settings = await loadSettings();
     const keywords = await loadKeywords();
@@ -514,6 +766,7 @@ async function initPopup(): Promise<void> {
     updateGuardRailUI(settings);
     updateBreakoutFilterUI(settings.showOnlyBreakout || false);
     updatePillPositionUI((settings.newPostsPillPosition ?? 'bottom') as 'top' | 'bottom' | 'hidden');
+    updateTrustMrrUI(settings.trustMrr || DEFAULT_TRUST_MRR_SETTINGS);
     renderKeywords(keywords);
     
     // Set up toggle listener
@@ -548,6 +801,8 @@ async function initPopup(): Promise<void> {
     if (pillPositionSelect) {
       pillPositionSelect.addEventListener('change', handlePillPositionChange);
     }
+
+    setupTrustMrrListeners();
     
     // Set up keyword management
     setupKeywordListeners();

@@ -5,8 +5,8 @@
 }
 
 body {
-  width: 320px;
-  height: 600px;
+  width: 340px;
+  height: 680px;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   font-size: 14px;
   line-height: 1.4;
@@ -41,6 +41,53 @@ body {
 /* Main content */
 .popup-main {
   flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  overflow-y: auto;
+  padding-right: 2px;
+}
+
+.domain-tabs {
+  display: flex;
+  gap: 6px;
+  padding: 4px;
+  border: 1px solid #e1e8ed;
+  border-radius: 10px;
+  background: #f7f9fa;
+  position: sticky;
+  top: 0;
+  z-index: 2;
+}
+
+.domain-tab {
+  flex: 1;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: #5f6368;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 8px 10px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.domain-tab:hover {
+  color: #1f2937;
+}
+
+.domain-tab.is-active {
+  background: #ffffff;
+  color: #111827;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+}
+
+.domain-panel {
+  display: none;
+}
+
+.domain-panel.is-active {
   display: flex;
   flex-direction: column;
   gap: 16px;
@@ -234,6 +281,50 @@ body {
 }
 
 .pill-position-select:focus {
+  outline: none;
+  border-color: #1da1f2;
+  box-shadow: 0 0 0 2px rgba(29, 161, 242, 0.1);
+}
+
+.trustmrr-section {
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid #e1e8ed;
+}
+
+.trustmrr-section--standalone {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: none;
+}
+
+.trustmrr-range-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.trustmrr-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.trustmrr-field span {
+  font-size: 11px;
+  color: #666;
+}
+
+.trustmrr-field input {
+  width: 100%;
+  border: 1px solid #e1e8ed;
+  border-radius: 6px;
+  padding: 7px 8px;
+  font-size: 12px;
+}
+
+.trustmrr-field input:focus {
   outline: none;
   border-color: #1da1f2;
   box-shadow: 0 0 0 2px rgba(29, 161, 242, 0.1);
