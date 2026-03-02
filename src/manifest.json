@@ -1,14 +1,16 @@
 {
   "manifest_version": 3,
   "name": "Tweet Heat Map",
-  "version": "0.1.0",
+  "version": "1.2.0",
   "description": "Color-codes tweets by view-count and flags fresh ones with 🔥.",
   "permissions": ["activeTab", "storage", "scripting"],
   "host_permissions": [
     "https://*.twitter.com/*",
     "https://*.x.com/*",
     "https://trustmrr.com/*",
-    "https://*.trustmrr.com/*"
+    "https://*.trustmrr.com/*",
+    "https://explodingtopics.com/*",
+    "https://*.explodingtopics.com/*"
   ],
   "action": {
     "default_popup": "popup/popup.html",
@@ -24,6 +26,12 @@
     {
       "matches": ["https://trustmrr.com/*", "https://*.trustmrr.com/*"],
       "js": ["trustmrr.js"],
+      "type": "module",
+      "run_at": "document_idle"
+    },
+    {
+      "matches": ["https://explodingtopics.com/*", "https://*.explodingtopics.com/*"],
+      "js": ["explodingtopics.js"],
       "type": "module",
       "run_at": "document_idle"
     }

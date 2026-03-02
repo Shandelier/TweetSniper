@@ -21,6 +21,9 @@
         <button id="tab-trustmrr" class="domain-tab" data-tab-target="trustmrr" role="tab" aria-selected="false">
           TrustMRR
         </button>
+        <button id="tab-explodingtopics" class="domain-tab" data-tab-target="explodingtopics" role="tab" aria-selected="false">
+          ExplodingTopics
+        </button>
       </div>
 
       <section id="panel-x" class="domain-panel is-active" data-tab-panel="x" role="tabpanel">
@@ -194,6 +197,62 @@
               <input id="trustmrr-total-max" type="number" min="0" step="100" placeholder="optional">
             </label>
           </div>
+        </div>
+      </section>
+
+      <section id="panel-explodingtopics" class="domain-panel" data-tab-panel="explodingtopics" role="tabpanel">
+        <div class="trustmrr-section trustmrr-section--standalone">
+          <h3 class="mode-title">ExplodingTopics Filters</h3>
+
+          <label class="toggle-label" for="explodingtopics-enabled-toggle">
+            <span class="toggle-text">Enable on ExplodingTopics</span>
+            <div class="toggle-switch">
+              <input type="checkbox" id="explodingtopics-enabled-toggle" class="toggle-input">
+              <span class="toggle-slider"></span>
+            </div>
+          </label>
+
+          <label class="toggle-label" for="explodingtopics-hide-toggle">
+            <span class="toggle-text">Hide non-matching trends</span>
+            <div class="toggle-switch">
+              <input type="checkbox" id="explodingtopics-hide-toggle" class="toggle-input">
+              <span class="toggle-slider"></span>
+            </div>
+          </label>
+
+          <div class="trustmrr-range-grid">
+            <label class="trustmrr-field">
+              <span>Volume min</span>
+              <input id="explodingtopics-volume-min" type="text" placeholder="e.g. 1k">
+            </label>
+            <label class="trustmrr-field">
+              <span>Volume max</span>
+              <input id="explodingtopics-volume-max" type="text" placeholder="e.g. 200k">
+            </label>
+
+            <label class="trustmrr-field">
+              <span>Growth min (%)</span>
+              <input id="explodingtopics-growth-min" type="text" placeholder="e.g. 300 or 3x">
+            </label>
+            <label class="trustmrr-field">
+              <span>Growth max (%)</span>
+              <input id="explodingtopics-growth-max" type="text" placeholder="optional">
+            </label>
+          </div>
+
+          <label class="toggle-label" for="explodingtopics-autoload-toggle">
+            <span class="toggle-text">Auto-load more pages</span>
+            <div class="toggle-switch">
+              <input type="checkbox" id="explodingtopics-autoload-toggle" class="toggle-input">
+              <span class="toggle-slider"></span>
+            </div>
+          </label>
+
+          <label class="trustmrr-field">
+            <span>Extra pages to load</span>
+            <input id="explodingtopics-max-pages" type="number" min="1" max="20" step="1" placeholder="3">
+          </label>
+          <p class="filter-description">Loads additional pagination pages (same filters) and appends trends to the current grid.</p>
         </div>
       </section>
     </main>

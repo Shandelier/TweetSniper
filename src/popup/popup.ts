@@ -15,6 +15,17 @@ interface TrustMrrSettings {
   totalMax: number | null;
 }
 
+interface ExplodingTopicsSettings {
+  enabled: boolean;
+  hideNonMatching: boolean;
+  volumeMin: number | null;
+  volumeMax: number | null;
+  growthMin: number | null;
+  growthMax: number | null;
+  autoLoadMore: boolean;
+  maxExtraPages: number;
+}
+
 interface Settings {
   enabled: boolean;
   indicatorMode?: 'views' | 'breakout';
@@ -23,9 +34,10 @@ interface Settings {
   showOnlyBreakout?: boolean;
   newPostsPillPosition?: 'top' | 'bottom' | 'hidden';
   trustMrr?: TrustMrrSettings;
+  explodingTopics?: ExplodingTopicsSettings;
 }
 
-type DomainTab = 'x' | 'trustmrr';
+type DomainTab = 'x' | 'trustmrr' | 'explodingtopics';
 
 const SETTINGS_KEY = 'thm-settings';
 const KEYWORDS_KEY = 'thm-keywords';
@@ -42,8 +54,19 @@ const DEFAULT_TRUST_MRR_SETTINGS: TrustMrrSettings = {
   totalMax: null
 };
 
+const DEFAULT_EXPLODING_TOPICS_SETTINGS: ExplodingTopicsSettings = {
+  enabled: true,
+  hideNonMatching: true,
+  volumeMin: null,
+  volumeMax: null,
+  growthMin: null,
+  growthMax: null,
+  autoLoadMore: true,
+  maxExtraPages: 3
+};
+
 function isDomainTab(value: string | null): value is DomainTab {
-  return value === 'x' || value === 'trustmrr';
+  return value === 'x' || value === 'trustmrr' || value === 'explodingtopics';
 }
 
 function setActiveDomainTab(tab: DomainTab): void {
@@ -78,7 +101,7 @@ function setupDomainTabs(initialTab: DomainTab): void {
   tabButtons.forEach(button => {
     button.addEventListener('click', () => {
       const target = (button as HTMLElement).dataset.tabTarget;
-      if (target === 'x' || target === 'trustmrr') {
+      if (target === 'x' || target === 'trustmrr' || target === 'explodingtopics') {
         setActiveDomainTab(target);
       }
     });
@@ -105,6 +128,9 @@ function inferDomainTabFromUrl(url: string | undefined): DomainTab | null {
     const parsed = new window.URL(url);
     if (parsed.hostname.includes('trustmrr.com')) {
       return 'trustmrr';
+    }
+    if (parsed.hostname.includes('explodingtopics.com')) {
+      return 'explodingtopics';
     }
     if (parsed.hostname.includes('x.com') || parsed.hostname.includes('twitter.com')) {
       return 'x';
@@ -179,7 +205,8 @@ async function loadSettings(): Promise<Settings> {
     breakoutMaxAge: 120,
     showOnlyBreakout: false,
     newPostsPillPosition: 'bottom',
-    trustMrr: { ...DEFAULT_TRUST_MRR_SETTINGS }
+    trustMrr: { ...DEFAULT_TRUST_MRR_SETTINGS },
+    explodingTopics: { ...DEFAULT_EXPLODING_TOPICS_SETTINGS }
   };
 
   try {
@@ -192,6 +219,10 @@ async function loadSettings(): Promise<Settings> {
         trustMrr: {
           ...DEFAULT_TRUST_MRR_SETTINGS,
           ...(storedSettings.trustMrr || {})
+        },
+        explodingTopics: {
+          ...DEFAULT_EXPLODING_TOPICS_SETTINGS,
+          ...(storedSettings.explodingTopics || {})
         }
       };
     }
@@ -342,9 +373,50 @@ function parseNullableNumber(raw: string): number | null {
   if (!trimmed) {
     return null;
   }
-  const parsed = Number.parseFloat(trimmed);
-  if (!Number.isFinite(parsed) || parsed < 0) {
-    return null;
+
+  const compact = trimmed.replace(/,/g, '').replace(/\s+/g, '').toLowerCase();
+  const percentMatch = compact.match(/^\+?(\d+(?:\.\d+)?)%$/);
+  if (percentMatch) {
+    const value = Number.parseFloat(percentMatch[1]);
+    return Number.isFinite(value) && value >= 0 ? value : null;
+  }
+
+  const xMatch = compact.match(/^\+?(\d+(?:\.\d+)?)(?:x|×)\+?$/);
+  if (xMatch) {
+    const value = Number.parseFloat(xMatch[1]) * 100;
+    return Number.isFinite(value) && value >= 0 ? value : null;
+  }
+
+  const suffixMatch = compact.match(/^(\d+(?:\.\d+)?)([kmb])$/);
+  if (suffixMatch) {
+    const base = Number.parseFloat(suffixMatch[1]);
+    if (!Number.isFinite(base) || base < 0) {
+      return null;
+    }
+    const suffix = suffixMatch[2];
+    if (suffix === 'k') {
+      return base * 1_000;
+    }
+    if (suffix === 'm') {
+      return base * 1_000_000;
+    }
+    if (suffix === 'b') {
+      return base * 1_000_000_000;
+    }
+  }
+
+  const parsed = Number.parseFloat(compact.replace(/^\+/, ''));
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : null;
+}
+
+function parsePositiveInt(raw: string, fallback: number): number {
+  const trimmed = raw.trim();
+  if (!trimmed) {
+    return fallback;
+  }
+  const parsed = Number.parseInt(trimmed, 10);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    return fallback;
   }
   return parsed;
 }
@@ -410,6 +482,71 @@ function collectTrustMrrFromUI(): TrustMrrSettings {
     mrrMax: parseNullableNumber(mrrMax?.value || ''),
     totalMin: parseNullableNumber(totalMin?.value || ''),
     totalMax: parseNullableNumber(totalMax?.value || '')
+  };
+}
+
+function updateExplodingTopicsUI(explodingTopics: ExplodingTopicsSettings): void {
+  const enabledToggle = document.getElementById('explodingtopics-enabled-toggle') as HTMLInputElement | null;
+  const hideToggle = document.getElementById('explodingtopics-hide-toggle') as HTMLInputElement | null;
+  const volumeMin = document.getElementById('explodingtopics-volume-min') as HTMLInputElement | null;
+  const volumeMax = document.getElementById('explodingtopics-volume-max') as HTMLInputElement | null;
+  const growthMin = document.getElementById('explodingtopics-growth-min') as HTMLInputElement | null;
+  const growthMax = document.getElementById('explodingtopics-growth-max') as HTMLInputElement | null;
+  const autoLoadToggle = document.getElementById('explodingtopics-autoload-toggle') as HTMLInputElement | null;
+  const maxPages = document.getElementById('explodingtopics-max-pages') as HTMLInputElement | null;
+
+  if (enabledToggle) {
+    enabledToggle.checked = explodingTopics.enabled;
+  }
+  if (hideToggle) {
+    hideToggle.checked = explodingTopics.hideNonMatching;
+  }
+  if (volumeMin) {
+    volumeMin.value = toInputValue(explodingTopics.volumeMin);
+  }
+  if (volumeMax) {
+    volumeMax.value = toInputValue(explodingTopics.volumeMax);
+  }
+  if (growthMin) {
+    growthMin.value = toInputValue(explodingTopics.growthMin);
+  }
+  if (growthMax) {
+    growthMax.value = toInputValue(explodingTopics.growthMax);
+  }
+  if (autoLoadToggle) {
+    autoLoadToggle.checked = explodingTopics.autoLoadMore;
+  }
+  if (maxPages) {
+    maxPages.value = String(explodingTopics.maxExtraPages);
+  }
+}
+
+function collectExplodingTopicsFromUI(): ExplodingTopicsSettings {
+  const enabledToggle = document.getElementById('explodingtopics-enabled-toggle') as HTMLInputElement | null;
+  const hideToggle = document.getElementById('explodingtopics-hide-toggle') as HTMLInputElement | null;
+  const volumeMin = document.getElementById('explodingtopics-volume-min') as HTMLInputElement | null;
+  const volumeMax = document.getElementById('explodingtopics-volume-max') as HTMLInputElement | null;
+  const growthMin = document.getElementById('explodingtopics-growth-min') as HTMLInputElement | null;
+  const growthMax = document.getElementById('explodingtopics-growth-max') as HTMLInputElement | null;
+  const autoLoadToggle = document.getElementById('explodingtopics-autoload-toggle') as HTMLInputElement | null;
+  const maxPages = document.getElementById('explodingtopics-max-pages') as HTMLInputElement | null;
+
+  const parsedMaxPages = parsePositiveInt(
+    maxPages?.value || '',
+    DEFAULT_EXPLODING_TOPICS_SETTINGS.maxExtraPages
+  );
+
+  return {
+    enabled: enabledToggle ? enabledToggle.checked : DEFAULT_EXPLODING_TOPICS_SETTINGS.enabled,
+    hideNonMatching: hideToggle ? hideToggle.checked : DEFAULT_EXPLODING_TOPICS_SETTINGS.hideNonMatching,
+    volumeMin: parseNullableNumber(volumeMin?.value || ''),
+    volumeMax: parseNullableNumber(volumeMax?.value || ''),
+    growthMin: parseNullableNumber(growthMin?.value || ''),
+    growthMax: parseNullableNumber(growthMax?.value || ''),
+    autoLoadMore: autoLoadToggle
+      ? autoLoadToggle.checked
+      : DEFAULT_EXPLODING_TOPICS_SETTINGS.autoLoadMore,
+    maxExtraPages: Math.min(20, Math.max(1, parsedMaxPages))
   };
 }
 
@@ -741,10 +878,65 @@ function setupTrustMrrListeners(): void {
     const el = document.getElementById(id) as HTMLInputElement | null;
     if (!el) return;
 
-    const eventName = el.type === 'number' ? 'change' : 'change';
+    const eventName = el.type === 'checkbox' ? 'change' : 'input';
     el.addEventListener(eventName, () => {
       void handleTrustMrrSettingsChange();
     });
+    if (eventName !== 'change') {
+      el.addEventListener('change', () => {
+        void handleTrustMrrSettingsChange();
+      });
+    }
+  });
+}
+
+async function handleExplodingTopicsSettingsChange(): Promise<void> {
+  const currentSettings = await loadSettings();
+  const settings: Settings = {
+    ...currentSettings,
+    explodingTopics: collectExplodingTopicsFromUI()
+  };
+
+  await saveSettings(settings);
+
+  try {
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (tab.id) {
+      await chrome.tabs.sendMessage(tab.id, {
+        type: 'settingsChanged',
+        settings
+      });
+    }
+  } catch (error) {
+    console.debug('Could not notify content script:', error);
+  }
+}
+
+function setupExplodingTopicsListeners(): void {
+  const ids = [
+    'explodingtopics-enabled-toggle',
+    'explodingtopics-hide-toggle',
+    'explodingtopics-volume-min',
+    'explodingtopics-volume-max',
+    'explodingtopics-growth-min',
+    'explodingtopics-growth-max',
+    'explodingtopics-autoload-toggle',
+    'explodingtopics-max-pages'
+  ];
+
+  ids.forEach(id => {
+    const el = document.getElementById(id) as HTMLInputElement | null;
+    if (!el) return;
+
+    const eventName = el.type === 'checkbox' ? 'change' : 'input';
+    el.addEventListener(eventName, () => {
+      void handleExplodingTopicsSettingsChange();
+    });
+    if (eventName !== 'change') {
+      el.addEventListener('change', () => {
+        void handleExplodingTopicsSettingsChange();
+      });
+    }
   });
 }
 
@@ -767,6 +959,7 @@ async function initPopup(): Promise<void> {
     updateBreakoutFilterUI(settings.showOnlyBreakout || false);
     updatePillPositionUI((settings.newPostsPillPosition ?? 'bottom') as 'top' | 'bottom' | 'hidden');
     updateTrustMrrUI(settings.trustMrr || DEFAULT_TRUST_MRR_SETTINGS);
+    updateExplodingTopicsUI(settings.explodingTopics || DEFAULT_EXPLODING_TOPICS_SETTINGS);
     renderKeywords(keywords);
     
     // Set up toggle listener
@@ -803,6 +996,7 @@ async function initPopup(): Promise<void> {
     }
 
     setupTrustMrrListeners();
+    setupExplodingTopicsListeners();
     
     // Set up keyword management
     setupKeywordListeners();

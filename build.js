@@ -23,14 +23,16 @@ function copyStaticFiles() {
   const manifest = {
     manifest_version: 3,
     name: "Tweet Heat Map",
-    version: "0.1.0",
+    version: "1.2.0",
     description: "Color-codes tweets by view-count and flags fresh ones with 🔥.",
     permissions: ["storage"],
     host_permissions: [
       "https://*.twitter.com/*",
       "https://*.x.com/*",
       "https://trustmrr.com/*",
-      "https://*.trustmrr.com/*"
+      "https://*.trustmrr.com/*",
+      "https://explodingtopics.com/*",
+      "https://*.explodingtopics.com/*"
     ],
     action: {
       default_popup: "popup/popup.html",
@@ -45,6 +47,11 @@ function copyStaticFiles() {
       {
         matches: ["https://trustmrr.com/*", "https://*.trustmrr.com/*"],
         js: ["trustmrr.js"],
+        run_at: "document_idle"
+      },
+      {
+        matches: ["https://explodingtopics.com/*", "https://*.explodingtopics.com/*"],
+        js: ["explodingtopics.js"],
         run_at: "document_idle"
       }
     ],
@@ -82,6 +89,13 @@ if (isWatchMode) {
     format: 'iife',
     ...buildOptions,
   }).then(ctx => ctx.watch());
+
+  esbuild.context({
+    entryPoints: ['src/explodingtopics.ts'],
+    outfile: 'dist/explodingtopics.js',
+    format: 'iife',
+    ...buildOptions,
+  }).then(ctx => ctx.watch());
   
   // Build and watch popup script
   esbuild.context({
@@ -107,6 +121,13 @@ if (isWatchMode) {
   esbuild.buildSync({
     entryPoints: ['src/trustmrr.ts'],
     outfile: 'dist/trustmrr.js',
+    format: 'iife',
+    ...buildOptions,
+  });
+
+  esbuild.buildSync({
+    entryPoints: ['src/explodingtopics.ts'],
+    outfile: 'dist/explodingtopics.js',
     format: 'iife',
     ...buildOptions,
   });
