@@ -23,7 +23,7 @@ function copyStaticFiles() {
   const manifest = {
     manifest_version: 3,
     name: "Tweet Heat Map",
-    version: "1.2.0",
+    version: "1.3.0",
     description: "Color-codes tweets by view-count and flags fresh ones with 🔥.",
     permissions: ["storage"],
     host_permissions: [
@@ -39,6 +39,12 @@ function copyStaticFiles() {
       default_icon: "icons/icon128.png"
     },
     content_scripts: [
+      {
+        matches: ["https://*.twitter.com/*", "https://*.x.com/*"],
+        js: ["pagehook.js"],
+        run_at: "document_start",
+        world: "MAIN"
+      },
       {
         matches: ["https://*.twitter.com/*", "https://*.x.com/*"],
         js: ["content.js"],
@@ -84,6 +90,13 @@ if (isWatchMode) {
   }).then(ctx => ctx.watch());
 
   esbuild.context({
+    entryPoints: ['src/pagehook.ts'],
+    outfile: 'dist/pagehook.js',
+    format: 'iife',
+    ...buildOptions,
+  }).then(ctx => ctx.watch());
+
+  esbuild.context({
     entryPoints: ['src/trustmrr.ts'],
     outfile: 'dist/trustmrr.js',
     format: 'iife',
@@ -114,6 +127,13 @@ if (isWatchMode) {
   esbuild.buildSync({
     entryPoints: ['src/content.ts'],
     outfile: 'dist/content.js',
+    format: 'iife',
+    ...buildOptions,
+  });
+
+  esbuild.buildSync({
+    entryPoints: ['src/pagehook.ts'],
+    outfile: 'dist/pagehook.js',
     format: 'iife',
     ...buildOptions,
   });

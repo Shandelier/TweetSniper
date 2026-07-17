@@ -183,8 +183,10 @@ function markStatusPills(root: ParentNode = document): void {
 // Follower cache state
 type FollowerCacheEntry = { count: number; updated: number };
 const FOLLOWER_CACHE_KEY = 'ts-follower-cache';
+const FOLLOWER_MESSAGE_TYPE = 'THM_FOLLOWER_COUNTS';
+const FOLLOWER_CACHE_MAX_ENTRIES = 3000;
+const FOLLOWER_CACHE_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;
 let followerCache: Record<string, FollowerCacheEntry> = {};
-let lastProfileCacheUpdate: { handle: string; ts: number } | null = null;
 
 // Follower badge thresholds and styling
 const FOLLOWER_THRESHOLDS = [
@@ -288,15 +290,40 @@ async function loadFollowerCache(): Promise<void> {
   }
 }
 
-async function saveFollowerCount(handle: string, count: number): Promise<void> {
-  if (!handle || !Number.isFinite(count)) return;
-  const key = handle.toLowerCase();
-  followerCache[key] = { count, updated: Date.now() };
-  try {
-    await chrome.storage.local.set({ [FOLLOWER_CACHE_KEY]: followerCache });
-  } catch {
-    // Ignore storage errors
+function pruneFollowerCache(): void {
+  const now = Date.now();
+  let entries = Object.entries(followerCache).filter(
+    ([, entry]) => now - entry.updated <= FOLLOWER_CACHE_MAX_AGE_MS
+  );
+  if (entries.length > FOLLOWER_CACHE_MAX_ENTRIES) {
+    entries.sort((a, b) => b[1].updated - a[1].updated);
+    entries = entries.slice(0, FOLLOWER_CACHE_MAX_ENTRIES);
   }
+  followerCache = Object.fromEntries(entries);
+}
+
+let followerSaveTimer: number | null = null;
+function scheduleFollowerCacheSave(): void {
+  if (followerSaveTimer !== null) return;
+  followerSaveTimer = window.setTimeout(() => {
+    followerSaveTimer = null;
+    pruneFollowerCache();
+    chrome.storage.local.set({ [FOLLOWER_CACHE_KEY]: followerCache }).catch(() => {
+      // Ignore storage errors
+    });
+  }, 1000);
+}
+
+let badgeRenderTimer: number | null = null;
+function scheduleBadgeRender(): void {
+  if (badgeRenderTimer !== null) return;
+  badgeRenderTimer = window.setTimeout(() => {
+    badgeRenderTimer = null;
+    renderBadgesFromCacheInContainer(document);
+    document.querySelectorAll('div[data-testid="UserCell"]').forEach(cell => {
+      renderBadgeFromCacheForUserCell(cell as HTMLElement);
+    });
+  }, 100);
 }
 
 function getCachedFollowerCount(handle: string): number | null {
@@ -314,13 +341,25 @@ function getUsernameFromArticle(articleEl: HTMLElement): string | null {
   return match ? match[1] : null;
 }
 
+// Twitter embeds the owner's handle in the avatar itself
+// (data-testid="UserAvatar-Container-<handle>"), which is more reliable than
+// guessing from links — it stays correct for quoted tweets and user cells.
+function getHandleFromAvatar(avatar: HTMLElement): string | null {
+  const container = avatar.matches('[data-testid^="UserAvatar-Container-"]')
+    ? avatar
+    : avatar.querySelector('[data-testid^="UserAvatar-Container-"]');
+  const testid = container?.getAttribute('data-testid') || '';
+  const handle = testid.slice('UserAvatar-Container-'.length);
+  return /^[A-Za-z0-9_]{1,15}$/.test(handle) ? handle : null;
+}
+
 function renderBadgeFromCacheForArticle(articleEl: HTMLElement): void {
-  const handle = getUsernameFromArticle(articleEl);
+  const avatar = articleEl.querySelector('div[data-testid="Tweet-User-Avatar"]') as HTMLElement | null;
+  if (!avatar) return;
+  const handle = getHandleFromAvatar(avatar) ?? getUsernameFromArticle(articleEl);
   if (!handle) return;
   const count = getCachedFollowerCount(handle);
   if (count == null) return;
-  const avatar = articleEl.querySelector('div[data-testid="Tweet-User-Avatar"]') as HTMLElement | null;
-  if (!avatar) return;
   addFollowerBadge(avatar, count);
 }
 
@@ -328,12 +367,6 @@ function renderBadgesFromCacheInContainer(root: ParentNode = document): void {
   root.querySelectorAll('article[data-testid="tweet"]').forEach(el => {
     renderBadgeFromCacheForArticle(el as HTMLElement);
   });
-}
-
-function extractHandleFromHoverCard(popover: Element): string | null {
-  const text = popover.textContent || '';
-  const atMatch = text.match(/@([A-Za-z0-9_]{1,15})/);
-  return atMatch ? atMatch[1] : null;
 }
 
 // ---- User cell helpers (followers/following/verified_followers tabs) ----
@@ -359,66 +392,25 @@ function getHandleFromUserCell(cellEl: HTMLElement): string | null {
   return tm ? tm[1] : null;
 }
 
+// Note: real avatar testids are suffixed ("UserAvatar-Container-<handle>"),
+// so the prefix match is what actually hits in user cells.
+const AVATAR_SELECTOR =
+  'div[data-testid="Tweet-User-Avatar"], div[data-testid^="UserAvatar-Container"], div[data-testid="UserAvatar"]';
+
 function findAvatarContainer(root: Element): HTMLElement | null {
-  const direct = (root.closest('div[data-testid="Tweet-User-Avatar"], div[data-testid="UserAvatar-Container"], div[data-testid="UserAvatar"]') as HTMLElement | null);
+  const direct = root.closest(AVATAR_SELECTOR) as HTMLElement | null;
   if (direct) return direct;
-  const nested = root.querySelector('div[data-testid="Tweet-User-Avatar"], div[data-testid="UserAvatar-Container"], div[data-testid="UserAvatar"]') as HTMLElement | null;
-  return nested;
+  return root.querySelector(AVATAR_SELECTOR) as HTMLElement | null;
 }
 
 function renderBadgeFromCacheForUserCell(cellEl: HTMLElement): void {
-  const handle = getHandleFromUserCell(cellEl);
+  const avatar = findAvatarContainer(cellEl);
+  if (!avatar) return;
+  const handle = getHandleFromAvatar(avatar) ?? getHandleFromUserCell(cellEl);
   if (!handle) return;
   const count = getCachedFollowerCount(handle);
   if (count == null) return;
-  const avatar = findAvatarContainer(cellEl);
-  if (!avatar) return;
   addFollowerBadge(avatar, count);
-}
-
-function pollFollowerCount(avatar: HTMLElement, attempt = 0): void {
-  const popover = document.querySelector('[data-testid="HoverCard"]');
-  if (popover) {
-    const text = popover.textContent || '';
-    const match = text.match(/([\d,.]+\s*[KkMmBb]?)\s*Followers/i);
-    if (match) {
-      const count = parseCount(match[1]);
-      if (typeof count === 'number') {
-        // Try to determine the handle to cache the value
-        let handle: string | null = null;
-        const article = avatar.closest('article[data-testid="tweet"]') as HTMLElement | null;
-        if (article) handle = getUsernameFromArticle(article);
-        // Check a user cell context as well
-        if (!handle) {
-          const userCell = avatar.closest('div[data-testid="UserCell"]') as HTMLElement | null;
-          if (userCell) {
-            handle = getHandleFromUserCell(userCell);
-          }
-        }
-        if (!handle) handle = extractHandleFromHoverCard(popover);
-        if (handle) {
-          void saveFollowerCount(handle, count);
-        }
-        addFollowerBadge(avatar, count);
-        return;
-      }
-    }
-  }
-
-  if (attempt < 10) {
-    setTimeout(() => pollFollowerCount(avatar, attempt + 1), 200);
-  }
-}
-
-function onAvatarHover(event: MouseEvent): void {
-  const target = event.target;
-  if (!(target instanceof Element)) return;
-
-  const avatar = target.closest(
-    'div[data-testid="Tweet-User-Avatar"], div[data-testid="UserAvatar-Container"], div[data-testid="UserAvatar"]'
-  );
-  if (!avatar || (avatar as HTMLElement).querySelector('.ts-follower-badge')) return;
-  setTimeout(() => pollFollowerCount(avatar as HTMLElement), 300);
 }
 
 function getTargetContainer(articleEl: HTMLElement): HTMLElement {
@@ -850,9 +842,6 @@ function observeNew(): void {
       }
 
       markStatusPills(document);
-
-      // Attempt to update follower cache if we're on a profile page
-      maybeUpdateProfileCache();
     };
 
     if ('requestIdleCallback' in window) {
@@ -1031,63 +1020,33 @@ function setupMessageListener(): void {
   });
 }
 
-function setupFollowerHover(): void {
-  document.addEventListener('mouseenter', onAvatarHover, true);
-}
+/**
+ * Receive follower counts mined from Twitter's own API responses by the
+ * page hook (pagehook.ts, MAIN world). This is the sole source of follower
+ * data: exact numbers, delivered automatically as timelines load.
+ */
+function setupFollowerFeed(): void {
+  window.addEventListener('message', event => {
+    if (event.source !== window) return;
+    const data = event.data as { type?: string; users?: Array<{ handle?: unknown; count?: unknown }> };
+    if (!data || data.type !== FOLLOWER_MESSAGE_TYPE || !Array.isArray(data.users)) return;
 
-// ---- Profile page detection and cache update ----
-function getProfileHandleFromURL(): string | null {
-  const path = location.pathname.split('?')[0];
-  const parts = path.split('/').filter(Boolean);
-  if (parts.length === 0) return null;
-  const candidate = parts[0];
-  const reserved = new Set([
-    'home','explore','notifications','messages','i','settings','compose','search','marketplace','tos','privacy','login','signup','hashtag','topics'
-  ]);
-  if (reserved.has(candidate.toLowerCase())) return null;
-  if (!/^[A-Za-z0-9_]{1,15}$/.test(candidate)) return null;
-  return candidate;
-}
-
-function parseProfileFollowerCount(handle: string): number | null {
-  // Try the /<handle>/followers link first
-  const followersLink = document.querySelector(`a[href$="/${handle}/followers"]`);
-  if (followersLink) {
-    const aria = followersLink.getAttribute('aria-label') || '';
-    const ariaMatch = aria.match(/([\d,.]+\s*[KkMmBb]?)\s*Followers/i);
-    if (ariaMatch) return parseCount(ariaMatch[1]);
-    const text = followersLink.textContent || '';
-    const textMatch = text.match(/([\d,.]+\s*[KkMmBb]?)\s*Followers/i);
-    if (textMatch) return parseCount(textMatch[1]);
-  }
-  // Fallback: any element text with Followers
-  const all = Array.from(document.querySelectorAll('a, span, div'));
-  for (const el of all) {
-    const t = (el.textContent || '').trim();
-    if (/Followers/i.test(t)) {
-      const m = t.match(/([\d,.]+\s*[KkMmBb]?)\s*Followers/i);
-      if (m) {
-        const val = parseCount(m[1]);
-        if (val != null) return val;
-      }
+    let changed = false;
+    const now = Date.now();
+    for (const user of data.users) {
+      if (typeof user?.handle !== 'string' || typeof user?.count !== 'number') continue;
+      if (!Number.isFinite(user.count) || user.count < 0) continue;
+      const key = user.handle.toLowerCase();
+      const previous = followerCache[key];
+      followerCache[key] = { count: user.count, updated: now };
+      if (!previous || previous.count !== user.count) changed = true;
     }
-  }
-  return null;
-}
 
-function maybeUpdateProfileCache(): void {
-  const handle = getProfileHandleFromURL();
-  if (!handle) return;
-  const now = Date.now();
-  if (lastProfileCacheUpdate && lastProfileCacheUpdate.handle === handle && now - lastProfileCacheUpdate.ts < 15000) {
-    return; // avoid excessive parsing within 15s
-  }
-  const count = parseProfileFollowerCount(handle);
-  if (typeof count === 'number') {
-    lastProfileCacheUpdate = { handle, ts: now };
-    void saveFollowerCount(handle, count);
-    renderBadgesFromCacheInContainer(document);
-  }
+    if (changed) {
+      scheduleFollowerCacheSave();
+      scheduleBadgeRender();
+    }
+  });
 }
 
 /**
@@ -1112,7 +1071,7 @@ async function init(): Promise<void> {
   setupStorageListener();
   setupMessageListener();
   setupCleanup();
-  setupFollowerHover();
+  setupFollowerFeed();
 
   const runLogic = () => {
     updateExtensionState();
